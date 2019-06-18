@@ -16,4 +16,4 @@ require(methods)
 yaml_list_object <- yaml.load_file("C:/Users/torla438/Work Folders/Documents/QC/20190411/combined/txt/report_v0.92.6.yaml")
 r <- createReport(txt_folder, yaml_list_object)
 
-#git test
+#SSH test
