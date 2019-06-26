@@ -10,6 +10,7 @@
   # Load widget graphics
   require(gWidgets2)
   options("guiToolkit"="RGtk2")
+  require(tcltk)
   
   # Load Quality Control methods
   require(PTXQC)
@@ -34,14 +35,16 @@
   lbl_dname<- glabel("Folder to run Quality Control on: ", container = gr)
   txt_dname <- gedit(dname, container = gr)
   h1 <- function(...){
-    dname <<- choose.dir(caption = "Select txt folder")
+    setwd('~')
+    getwd()
+    dname <<- tclvalue(tkchooseDirectory())
     svalue(txt_dname) <- dname
   }
   b1 <- gbutton("Select folder", container = gr, handler = h1)
   
   # Run button
   h2 <- function(...){
-    cat("Running Quality Control on", dname, "... please wait.\n")
+    cat("Running Quality Control on", dname, "... please wait until result Time elapsed is given.\n")
     if (dname != ""){
       y <- list.files(path = dname, pattern = "([0-9A-Za-z]+)[.][y][a][m][l]")
       p <- file.path(normalizePath(dname,"/"), y[[1]]) 
