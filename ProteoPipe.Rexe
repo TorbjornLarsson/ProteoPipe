@@ -10,7 +10,7 @@
   # Load widget graphics
   require(gWidgets2)
   options("guiToolkit"="RGtk2")
-  require(tcltk)
+  require(tcltk2)
   
   # Load Quality Control methods
   require(PTXQC)
@@ -44,7 +44,8 @@
   
   # Run button
   h2 <- function(...){
-    cat("Running Quality Control on", dname, "... please wait until result Time elapsed is given.\n")
+    cat("Running Quality Control on", dname, "\n")
+    cat("... please wait until result Time elapsed is given.\n")
     if (dname != ""){
       y <- list.files(path = dname, pattern = "([0-9A-Za-z]+)[.][y][a][m][l]")
       p <- file.path(normalizePath(dname,"/"), y[[1]]) 
