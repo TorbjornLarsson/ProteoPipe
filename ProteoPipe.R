@@ -45,7 +45,8 @@
   # Run button
   h2 <- function(...){
     cat("Running Quality Control on", dname, "\n")
-    cat("... please wait until result Time elapsed is given.\n")
+#    cat("... please wait until result Time elapsed is given.\n")
+    cat("... please wait...\n\n")
     if (dname != ""){
       y <- list.files(path = dname, pattern = "([0-9A-Za-z]+)[.][y][a][m][l]")
       p <- file.path(normalizePath(dname,"/"), y[[1]]) 
@@ -53,18 +54,19 @@
       yaml_list_object <- yaml.load_file(p)
       r <- createReport(svalue(txt_dname), yaml_list_object)
       }
+    cat("... done!.\n\n")
     }
   b2 <- gbutton("Start run", container = gr, handler = h2)
   
   # Quit button
   h3 <- function(...){
     dispose(win)
-    cat("Done!\n")
+    cat("Qutting! Please close this window with ctrl-C.\n")
   }
   b3 <- gbutton("Quit", container = gr, handler = h3)
   
   # Quick fix to keep running in background on target machine
   # Comment away during other testing
   Sys.sleep(1000000)
-  
+
 #} # end function
