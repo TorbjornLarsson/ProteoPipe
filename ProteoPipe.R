@@ -45,7 +45,6 @@
   # Run button
   h2 <- function(...){
     cat("Running Quality Control on", dname, "\n")
-#    cat("... please wait until result Time elapsed is given.\n")
     cat("... please wait...\n\n")
     if (dname != ""){
       y <- list.files(path = dname, pattern = "([0-9A-Za-z]+)[.][y][a][m][l]")
@@ -61,7 +60,7 @@
   # Quit button
   h3 <- function(...){
     dispose(win)
-    cat("Qutting! Please close this window with ctrl-C.\n")
+    q()
   }
   b3 <- gbutton("Quit", container = gr, handler = h3)
   
