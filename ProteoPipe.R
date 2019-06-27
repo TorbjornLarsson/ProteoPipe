@@ -35,7 +35,6 @@
   lbl_dname<- glabel("Folder to run Quality Control on: ", container = gr)
   txt_dname <- gedit(dname, container = gr)
   h1 <- function(...){
-    setwd('~')
     getwd()
     dname <<- tclvalue(tkchooseDirectory())
     svalue(txt_dname) <- dname
@@ -66,6 +65,6 @@
   
   # Quick fix to keep running in background on target machine
   # Comment away during other testing
-  Sys.sleep(1000000)
+  #Sys.sleep(1000000)
 
 #} # end function
