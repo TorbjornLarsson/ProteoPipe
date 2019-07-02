@@ -14,6 +14,8 @@ tryCatch({source("C:/Users/torla438/Work Folders/Documents/QC/ProteoPipe/ProteoP
                               warning=function(w) {
                                 write(conditionMessage(w), file=warnings_log, append=TRUE)
                                 invokeRestart("muffleWarning")
-                              })
+          })
+          
+          # Keep console open in background for messaging
           while (1){}
 })
