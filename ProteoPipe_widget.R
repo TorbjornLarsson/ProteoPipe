@@ -65,15 +65,18 @@ ProteoPipe_widget<-function(){
     if (dname != ""){
       cat("... please wait...\n\n")
       
-      # Currently supposes yaml file provided locally
+      # Default is generating yaml object, but use a provided one if in folder
       y <- list.files(path = dname, pattern = "([0-9A-Za-z]+)[.][y][a][m][l]")
-      yp <<- file.path(normalizePath(dname,"/"), y[[1]]) 
-      cat("Generating file", yp, "\n")
-      yaml_list_object <- yaml.load_file(yp)
+      
+      # Use first in list
+      if (length(y) > 0) {
+        yp <<- file.path(normalizePath(dname,"/"), y[[1]])
+        cat("Generating file", yp, "\n")
+        yaml_list_object <- yaml.load_file(yp)
 
       # Report will generate lots of warnings that we want to catch to warnings log file.
       # Call handler for each warning as they come, to reenter try/catch loop.
-      tryCatch(withCallingHandlers(createReport(svalue(txt_dname), yaml_list_object), 
+      tryCatch(withCallingHandlers(r <- createReport(svalue(txt_dname), yaml_list_object), 
                           # Warning object seems to have abbreviation 'w'
                           # W is a single warning list object when run with try/catch calling handler
                           warning=function(w) {
@@ -81,8 +84,18 @@ ProteoPipe_widget<-function(){
                             write(capture.output(cat("createReport() warning:", conditionMessage(w), 
                                                      "\n")), file=warnings_log, append=TRUE)
                             invokeRestart("muffleWarning")
-                                })) 
-      #createReport(svalue(txt_dname), yaml_list_object)
+                                }))
+      } else {
+        tryCatch(withCallingHandlers(r <- createReport(svalue(txt_dname)), 
+                                     warning=function(w) {
+                                       write(capture.output(cat("createReport() warning:", conditionMessage(w), 
+                                                                "\n")), file=warnings_log, append=TRUE)
+                                       invokeRestart("muffleWarning")
+                                     }))
+      }
+      
+      #r <- createReport(svalue(txt_dname), yaml_list_object)
+      #print(r$report_file_HTML)
       cat("... QC report finalized!\n\n")
       
       #Change visibilities
@@ -100,17 +113,13 @@ ProteoPipe_widget<-function(){
   
   # html report button
   h3 <- function(...){
-    report <- unlist(strsplit(basename(yp), '.yaml'))[1]
-    html_file <- file.path(dirname(yp), paste(report, "_combined.html", sep = ""))
-    browseURL(html_file)
+    browseURL(r$report_file_HTML)
   }
   b3 <- gbutton("html", container = rightbgr, handler = h3)
   
   # pdf report button
   h4 <- function(...){
-    report <- unlist(strsplit(basename(yp), '.yaml'))[1]
-    pdf_file <- file.path(dirname(yp), paste(report, "_combined.pdf", sep = ""))
-    browseURL(pdf_file)
+    browseURL(r$report_file_PDF)
   }
   b4 <- gbutton("pdf", container = rightbgr, handler = h4)
   
