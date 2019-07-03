@@ -35,8 +35,9 @@ ProteoPipe_widget<-function(){
   # Split screen
   topgr <- ggroup(container = gr, horizontal = FALSE)
   bottomgr <- ggroup(container = gr)
-  leftbgr <- ggroup(container = bottomgr, horizontal = FALSE)
-  rightbgr <- ggroup(container = bottomgr, horizontal = FALSE) 
+  leftbgr <- ggroup(container = bottomgr, horizontal = FALSE) # Used for stationary Quit button
+  rightbgr <- ggroup(container = bottomgr, horizontal = FALSE) # Used for Run, html, pdf buttons
+  visible(rightbgr) <- FALSE
 
   # Select folder textbox and button
   lbl_dname<- glabel("Selected txt folder to run Quality Control on: ", container = topgr)
@@ -46,30 +47,56 @@ ProteoPipe_widget<-function(){
     getwd()
     dname <<- tclvalue(tkchooseDirectory())
     svalue(txt_dname) <- dname
-#    dn <<- dname
+    
+    #Change visibilities
+    visible(rightbgr) <- TRUE
+    visible(b1) <- FALSE #Folder button
+    visible(b2) <- TRUE  #Run button
+    visible(b3) <- FALSE #html button
+    visible(b4) <- FALSE #pdf button
+    visible(b5) <- TRUE  #Quit button; always visible
   }
-  b1 <- gbutton("Select folder", container = leftbgr, handler = h1)
+  b1 <- gbutton("Select folder", container = topgr, handler = h1)
   
   # Run button
   h2 <- function(...){
-    cat("Running Quality Control on", dname, "\n")
-    cat("... please wait...\n\n")
+      cat("Running Quality Control on", dname, "\n")
+        
     if (dname != ""){
+      cat("... please wait...\n\n")
+      
+      # Currently supposes yaml file provided locally
       y <- list.files(path = dname, pattern = "([0-9A-Za-z]+)[.][y][a][m][l]")
       yp <<- file.path(normalizePath(dname,"/"), y[[1]]) 
       cat("Generating file", yp, "\n")
       yaml_list_object <- yaml.load_file(yp)
-      #y <- createReport(svalue(txt_dname), yaml_list_object)
+
+      # Report will generate lots of warnings that we want to catch to warnings log file.
+      # Call handler for each warning as they come, to reenter try/catch loop.
       tryCatch(withCallingHandlers(createReport(svalue(txt_dname), yaml_list_object), 
-                            warning=function(w) {
-                              write(conditionMessage(w), file=warnings_log, append=TRUE)
-                              invokeRestart("muffleWarning")
+                          # Warning object seems to have abbreviation 'w'
+                          # W is a single warning list object when run with try/catch calling handler
+                          warning=function(w) {
+                            # Note: conditionMessage(w) does that too
+                            write(capture.output(cat("createReport() warning:", conditionMessage(w), 
+                                                     "\n")), file=warnings_log, append=TRUE)
+                            invokeRestart("muffleWarning")
                                 })) 
       #createReport(svalue(txt_dname), yaml_list_object)
+      cat("... QC report finalized!\n\n")
+      
+      #Change visibilities
+      visible(rightbgr) <- TRUE
+      visible(b1) <- TRUE #Folder button
+      visible(b2) <- FALSE  #Run button
+      visible(b3) <- TRUE #html button
+      visible(b4) <- TRUE #pdf button
+      visible(b5) <- TRUE  #Quit button; always visible
     }
-    cat("... done!\n\n")
-    }
-  b2 <- gbutton("Run QC", container = leftbgr, handler = h2)
+  }
+  
+  b2 <- gbutton("Run QC", container = rightbgr, handler = h2)
+  visible(b2) <- FALSE
   
   # html report button
   h3 <- function(...){
@@ -77,7 +104,7 @@ ProteoPipe_widget<-function(){
     html_file <- file.path(dirname(yp), paste(report, "_combined.html", sep = ""))
     browseURL(html_file)
   }
-  b3 <- gbutton("html", container = leftbgr, handler = h3)
+  b3 <- gbutton("html", container = rightbgr, handler = h3)
   
   # pdf report button
   h4 <- function(...){
@@ -85,7 +112,7 @@ ProteoPipe_widget<-function(){
     pdf_file <- file.path(dirname(yp), paste(report, "_combined.pdf", sep = ""))
     browseURL(pdf_file)
   }
-  b4 <- gbutton("pdf", container = leftbgr, handler = h4)
+  b4 <- gbutton("pdf", container = rightbgr, handler = h4)
   
   # # Result image
   # g1 <- gimage(filename = "heatmap.png", dirname = "C:/Users/torla438/Work Folders/Documents/QC/ProteoPipe", container = gr)
@@ -96,7 +123,6 @@ ProteoPipe_widget<-function(){
     dispose(win)
     quit(save="yes")
   }
-  b4 <- gbutton("Quit", container = rightbgr, handler = h5)
+  b5 <- gbutton("Quit", container = leftbgr, handler = h5)
   
-#  return(dn)
 } # end function
