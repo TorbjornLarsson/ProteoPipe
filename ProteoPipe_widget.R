@@ -85,7 +85,7 @@ ProteoPipe_widget<-function(){
 
       # Report will generate lots of warnings that we want to catch to warnings log file.
       # Call handler for each warning as they come, to reenter try/catch loop.
-      tryCatch(withCallingHandlers(r <- createReport(svalue(txt_dname), yaml_list_object), 
+      tryCatch(withCallingHandlers(r <<- createReport(svalue(txt_dname), yaml_list_object), 
                           # Warning object seems to have abbreviation 'w'
                           # W is a single warning list object when run with try/catch calling handler
                           warning=function(w) {
