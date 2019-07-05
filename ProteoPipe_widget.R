@@ -17,6 +17,11 @@ ProteoPipe_widget<-function(){
   require(PTXQC)
   require(yaml)
   require(methods)
+  
+  # Load html, image methods
+  require(XML)
+  require(base64enc)
+  require(EBImage)
 
   cat("-------------------------------------\n")
   cat("ProteoPipe v1 [June, 2019]\n")
@@ -33,11 +38,13 @@ ProteoPipe_widget<-function(){
   gr <- ggroup(container = win, horizontal = FALSE)
 
   # Split screen
-  topgr <- ggroup(container = gr, horizontal = FALSE)
-  bottomgr <- ggroup(container = gr)
+  topgr <- ggroup(container = gr, horizontal = FALSE) # Used for folder select
+  middlegr <- ggroup(container = gr, horizontal = FALSE) # Used for result image
+  bottomgr <- ggroup(container = gr) # Used for button groups
   leftbgr <- ggroup(container = bottomgr, horizontal = FALSE) # Used for stationary Quit button
   rightbgr <- ggroup(container = bottomgr, horizontal = FALSE) # Used for Run, html, pdf buttons
-  visible(rightbgr) <- FALSE
+  visible(middlegr) <- FALSE # Result image
+  visible(rightbgr) <- FALSE # Run button group
 
   # Select folder textbox and button
   lbl_dname<- glabel("Selected txt folder to run Quality Control on: ", container = topgr)
@@ -49,7 +56,8 @@ ProteoPipe_widget<-function(){
     svalue(txt_dname) <- dname
     
     #Change visibilities
-    visible(rightbgr) <- TRUE
+    visible(middlegr) <- FALSE # Result image
+    visible(rightbgr) <- TRUE # Run button group
     visible(b1) <- FALSE #Folder button
     visible(b2) <- TRUE  #Run button
     visible(b3) <- FALSE #html button
@@ -89,19 +97,22 @@ ProteoPipe_widget<-function(){
 
       cat("... QC report finalized!\n\n")
       
+      # Generate result heatmap image from report files
+      plot_heatmap(r, middlegr)
+      
       #Change visibilities
-      visible(rightbgr) <- TRUE
+      visible(middlegr) <- TRUE # Result image
+      visible(rightbgr) <- TRUE # Button group
       visible(b1) <- TRUE #Folder button
-      visible(b2) <- FALSE  #Run button
+      visible(b2) <- FALSE #Run button
       visible(b3) <- TRUE #html button
       visible(b4) <- TRUE #pdf button
-      visible(b5) <- TRUE  #Quit button; always visible
+      visible(b5) <- TRUE #Quit button; always visible
     }
   }
   
   b2 <- gbutton("Run QC", container = rightbgr, handler = h2)
-  visible(b2) <- FALSE
-  
+
   # html report button
   h3 <- function(...){
     browseURL(r$report_file_HTML)
@@ -114,10 +125,6 @@ ProteoPipe_widget<-function(){
   }
   b4 <- gbutton("pdf", container = rightbgr, handler = h4)
   
-  # # Result image
-  # g1 <- gimage(filename = "heatmap.png", dirname = "C:/Users/torla438/Work Folders/Documents/QC/ProteoPipe", container = gr)
-  # size(g1) <- c(960,480)
-  
   # Quit button
   h5 <- function(...){
     dispose(win)
@@ -125,4 +132,36 @@ ProteoPipe_widget<-function(){
   }
   b5 <- gbutton("Quit", container = leftbgr, handler = h5)
   
-} # end function
+} # end Calling
+
+###################
+
+# Generate result heatmap image from report files
+plot_heatmap <- function(r, middlegr){
+
+  # Parse the html file and extract the heatmap node data
+  doc =  htmlParse(r$report_file_HTML)
+  src <-  xpathApply(doc, "//div[@id=\"heatmap\"]//img", xmlGetAttr, "src")
+  
+  # Convert the png base64 image data through a temporary file connection
+  base64 <- sub("data:image/png;base64,", "", unlist(src), fixed=TRUE)
+  bin <- base64decode(base64)
+  fileConn<-file(tf <- tempfile(fileext = ".png"), "wb")
+  writeBin(bin, fileConn)
+  close(fileConn)
+  
+  # Resize the image and plot it through a temporary file
+  # Resizing is hardcoded for now since that works; graphics bug?
+  imraw <- readImage(tf)
+  imscaled <- resize(imraw, w = 480, h = 240)
+  png(file=(tf <- tempfile(fileext = ".png")), bg = "transparent")
+  plot(imscaled)
+  dev.off()
+  
+  g1 <- gimage(tf, container = middlegr)
+  size(g1) <- c(480, 240)
+  
+  # Image and container should not be returned since that works; graphics bug?
+  return()
+  
+} # end Generating heatmap image
