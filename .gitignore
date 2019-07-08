@@ -4,10 +4,11 @@
 .Rhistory
 .RData
 .Ruserdata
-# Project design files #
+# Project design & default files #
 ########################
 *.jpg
 *.png
+*.yaml
 # Compiled source #
 ###################
 *.com

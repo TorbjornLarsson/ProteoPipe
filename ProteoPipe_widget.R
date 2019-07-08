@@ -29,7 +29,14 @@ ProteoPipe_widget<-function(){
   cat("Niklas Handin, et al.\n")
   cat("-------------------------------------\n")
   
+  # Default directory
   dname <- ""
+  
+  # Default white image put into temp file
+  plot.new()
+  rect(0, 0, 480, 240, border = NA)
+  png(file=(tf <- tempfile(fileext = ".png")), bg = "transparent")
+  dev.off()
 
   #------------------Calling
   
@@ -39,30 +46,32 @@ ProteoPipe_widget<-function(){
 
   # Split screen
   topgr <- ggroup(container = gr, horizontal = FALSE) # Used for folder select
-  middlegr <- ggroup(container = gr, horizontal = FALSE) # Used for result image
-  bottomgr <- ggroup(container = gr) # Used for button groups
-  leftbgr <- ggroup(container = bottomgr, horizontal = FALSE) # Used for stationary Quit button
-  rightbgr <- ggroup(container = bottomgr, horizontal = FALSE) # Used for Run, html, pdf buttons
-  visible(middlegr) <- FALSE # Result image
+  middlegr <- ggroup(container = gr) # Used for button groups
+  bottomgr <- ggroup(container = gr) # Used for result images
+  g1 <<- gimage(tf, container = bottomgr) # Image reference needs to be global in GTK
+  size(g1) <- c(480, 240)
+  leftbgr <- ggroup(container = middlegr, horizontal = FALSE) # Used for setup & quit buttons
+  rightbgr <- ggroup(container = middlegr, horizontal = FALSE) # Used for run & results buttons
+  visible(middlegr) <- TRUE # Button groups
   visible(rightbgr) <- FALSE # Run button group
-
+  visible(bottomgr) <- TRUE # Images group
+  
   # Select folder textbox and button
   lbl_dname<- glabel("Selected txt folder to run Quality Control on: ", container = topgr)
   txt_dname <- gedit(dname, container = topgr)
   
   h1 <- function(...){
     getwd()
-    dname <<- tclvalue(tkchooseDirectory())
+    dname <<- tk_choose.dir()
     svalue(txt_dname) <- dname
     
     #Change visibilities
-    visible(middlegr) <- FALSE # Result image
+    delete(bottomgr, g1) # Previous result images
     visible(rightbgr) <- TRUE # Run button group
     visible(b1) <- FALSE #Folder button
     visible(b2) <- TRUE  #Run button
     visible(b3) <- FALSE #html button
     visible(b4) <- FALSE #pdf button
-    visible(b5) <- TRUE  #Quit button; always visible
   }
   b1 <- gbutton("Select folder", container = topgr, handler = h1)
   
@@ -73,7 +82,8 @@ ProteoPipe_widget<-function(){
     if (dname != ""){
       cat("... please wait...\n\n")
       
-      # Default is generating yaml object, but use a provided one if in folder
+      # Default is provided yaml object, but use a provided one if in folder,
+      # else let PTXQC generate one.
       y <- list.files(path = dname, pattern = "([0-9A-Za-z]+)[.][y][a][m][l]")
       
       # Use first in list
@@ -81,7 +91,11 @@ ProteoPipe_widget<-function(){
         yp <<- file.path(normalizePath(dname,"/"), y[[1]])
         cat("Generating file", yp, "\n")
         yaml_list_object <- yaml.load_file(yp)
-      } else {yaml_list_object <- list()}
+      } else if(length(fname) > 0) {
+        cat("Generating file", fname, "\n")
+        yaml_list_object <- yaml.load_file(fname)
+      }
+      else {yaml_list_object <- list()}
 
       # Report will generate lots of warnings that we want to catch to warnings log file.
       # Call handler for each warning as they come, to reenter try/catch loop.
@@ -98,16 +112,40 @@ ProteoPipe_widget<-function(){
       cat("... QC report finalized!\n\n")
       
       # Generate result heatmap image from report files
-      plot_heatmap(r, middlegr)
-      
+      #bottomgr <- plot_heatmap(r, bottomgr)
+
+      # Parse the html file and extract the heatmap node data
+      doc =  htmlParse(r$report_file_HTML)
+      src <-  xpathApply(doc, "//div[@id=\"heatmap\"]//img", xmlGetAttr, "src")
+
+      # Convert the png base64 image data through a temporary file connection
+      base64 <- sub("data:image/png;base64,", "", unlist(src), fixed=TRUE)
+      bin <- base64decode(base64)
+      fileConn<-file(tf <- tempfile(fileext = ".png"), "wb")
+      writeBin(bin, fileConn)
+      close(fileConn)
+
+      # Resize the image and plot it through a temporary file
+      # Resizing is hardcoded for now since that works; graphics bug?
+      imraw <- readImage(tf)
+      imscaled <- resize(imraw, w = 480, h = 240)
+      png(file=(tf <- tempfile(fileext = ".png")), bg = "transparent")
+      plot(imscaled)
+      dev.off()
+
+      g1 <<- gimage(tf) # Image reference needs to be global in GTK
+      size(g1) <- c(480, 240)
+      add(bottomgr, g1)
+
+
       #Change visibilities
-      visible(middlegr) <- TRUE # Result image
       visible(rightbgr) <- TRUE # Button group
       visible(b1) <- TRUE #Folder button
       visible(b2) <- FALSE #Run button
       visible(b3) <- TRUE #html button
       visible(b4) <- TRUE #pdf button
       visible(b5) <- TRUE #Quit button; always visible
+      visible(b6) <- TRUE  #.yaml button; always visible
     }
   }
   
@@ -127,41 +165,56 @@ ProteoPipe_widget<-function(){
   
   # Quit button
   h5 <- function(...){
-    dispose(win)
+    dispose(win, ...)
     quit(save="yes")
   }
   b5 <- gbutton("Quit", container = leftbgr, handler = h5)
   
+  # Select .yaml file button
+  h6 <- function(...){
+    #Return list of file, perhaps empty
+    Filters <- matrix(c("yaml", ".yaml",
+                        "yaml", ".yaml"),
+                      2, 2, byrow = TRUE)
+    fname <<- tk_choose.files(default = "", caption = "Select .yaml file",
+                              multi = FALSE, filters = Filters, index = 1)
+  }
+  b6 <- gbutton("Select .yaml file", container = leftbgr, handler = h6)
+  
+  
 } # end Calling
 
-###################
-
-# Generate result heatmap image from report files
-plot_heatmap <- function(r, middlegr){
-
-  # Parse the html file and extract the heatmap node data
-  doc =  htmlParse(r$report_file_HTML)
-  src <-  xpathApply(doc, "//div[@id=\"heatmap\"]//img", xmlGetAttr, "src")
-  
-  # Convert the png base64 image data through a temporary file connection
-  base64 <- sub("data:image/png;base64,", "", unlist(src), fixed=TRUE)
-  bin <- base64decode(base64)
-  fileConn<-file(tf <- tempfile(fileext = ".png"), "wb")
-  writeBin(bin, fileConn)
-  close(fileConn)
-  
-  # Resize the image and plot it through a temporary file
-  # Resizing is hardcoded for now since that works; graphics bug?
-  imraw <- readImage(tf)
-  imscaled <- resize(imraw, w = 480, h = 240)
-  png(file=(tf <- tempfile(fileext = ".png")), bg = "transparent")
-  plot(imscaled)
-  dev.off()
-  
-  g1 <- gimage(tf, container = middlegr)
-  size(g1) <- c(480, 240)
-  
-  # Image and container should not be returned since that works; graphics bug?
-  return()
-  
-} # end Generating heatmap image
+# ###################
+# 
+# # Generate result heatmap image from report files
+# plot_heatmap <- function(r, bottomgr){
+# 
+#   # Parse the html file and extract the heatmap node data
+#   doc =  htmlParse(r$report_file_HTML)
+#   src <-  xpathApply(doc, "//div[@id=\"heatmap\"]//img", xmlGetAttr, "src")
+# 
+#   # Convert the png base64 image data through a temporary file connection
+#   base64 <- sub("data:image/png;base64,", "", unlist(src), fixed=TRUE)
+#   bin <- base64decode(base64)
+#   fileConn<-file(tf <- tempfile(fileext = ".png"), "wb")
+#   writeBin(bin, fileConn)
+#   close(fileConn)
+# 
+#   # Resize the image and plot it through a temporary file
+#   # Resizing is hardcoded for now since that works; graphics bug?
+#   imraw <- readImage(tf)
+#   imscaled <- resize(imraw, w = 480, h = 240)
+#   png(file=(tf <- tempfile(fileext = ".png")), bg = "transparent")
+#   plot(imscaled)
+#   dev.off()
+# 
+#   g1 <<- gimage(tf) # Image reference needs to be global in GTK
+#   size(g1) <- c(480, 240)
+#   add(bottomgr, g1)
+# 
+#   # return()
+# #  return_list <- list(bottomgr, ...)
+# #  return(return_list)
+#   return(bottomgr)
+# 
+# } # end Generating heatmap image
