@@ -4,10 +4,11 @@
 
 
 ProteoPipe_widget<-function(){
-
+  
   require(stringi)
-
+  
   # Load widget graphics; assumes librarys loaded to the used R
+  # Object references will be passed by reference frame (so is mutable) 
   require(gWidgets2)
   # To get the toolkit RGTk2, load library gWidgets2RGtk2 into R and accept installing GTK+
   options("guiToolkit"="RGtk2")
@@ -22,7 +23,7 @@ ProteoPipe_widget<-function(){
   require(XML)
   require(base64enc)
   require(EBImage)
-
+  
   cat("-------------------------------------\n")
   cat("ProteoPipe v1 [June, 2019]\n")
   cat("Uppsala University\n")
@@ -37,19 +38,22 @@ ProteoPipe_widget<-function(){
   rect(0, 0, 480, 240, border = NA)
   png(file=(tf <- tempfile(fileext = ".png")), bg = "transparent")
   dev.off()
-
+  
   #------------------Calling
   
   # GUI Widget
   win <- gwindow("ProteoPipe")
   gr <- ggroup(container = win, horizontal = FALSE)
-
+  
   # Split screen
   topgr <- ggroup(container = gr, horizontal = FALSE) # Used for folder select
   middlegr <- ggroup(container = gr) # Used for button groups
   bottomgr <- ggroup(container = gr) # Used for result images
-  g1 <<- gimage(tf, container = bottomgr) # Image reference needs to be global in GTK
+
+  g1 <- gimage(tf) # Image reference needs to be global in GTK
   size(g1) <- c(480, 240)
+  add(bottomgr, g1)
+
   leftbgr <- ggroup(container = middlegr, horizontal = FALSE) # Used for setup & quit buttons
   rightbgr <- ggroup(container = middlegr, horizontal = FALSE) # Used for run & results buttons
   visible(middlegr) <- TRUE # Button groups
@@ -60,7 +64,7 @@ ProteoPipe_widget<-function(){
   lbl_dname<- glabel("Selected txt folder to run Quality Control on: ", container = topgr)
   txt_dname <- gedit(dname, container = topgr)
   
-  h1 <- function(...){
+  h1 <- function(...,  env = parent.frame()){
     getwd()
     dname <<- tk_choose.dir()
     svalue(txt_dname) <- dname
@@ -76,9 +80,9 @@ ProteoPipe_widget<-function(){
   b1 <- gbutton("Select folder", container = topgr, handler = h1)
   
   # Run button
-  h2 <- function(...){
-      cat("Running Quality Control on", dname, "\n")
-        
+  h2 <- function(..., env = parent.frame()){
+    cat("Running Quality Control on", dname, "\n")
+    
     if (dname != ""){
       cat("... please wait...\n\n")
       
@@ -96,24 +100,22 @@ ProteoPipe_widget<-function(){
         yaml_list_object <- yaml.load_file(fname)
       }
       else {yaml_list_object <- list()}
-
+      
       # Report will generate lots of warnings that we want to catch to warnings log file.
       # Call handler for each warning as they come, to reenter try/catch loop.
       tryCatch(withCallingHandlers(r <<- createReport(svalue(txt_dname), yaml_list_object), 
-                          # Warning object seems to have abbreviation 'w'
-                          # W is a single warning list object when run with try/catch calling handler
-                          warning=function(w) {
-                            # Note: conditionMessage(w) does that too
-                            write(capture.output(cat("createReport() warning:", conditionMessage(w), 
-                                                     "\n")), file=warnings_log, append=TRUE)
-                            invokeRestart("muffleWarning")
-                                }))
-
+                                   # Warning object seems to have abbreviation 'w'
+                                   # W is a single warning list object when run with try/catch calling handler
+                                   warning=function(w) {
+                                     # Note: conditionMessage(w) does that too
+                                     write(capture.output(cat("createReport() warning:", conditionMessage(w), 
+                                                              "\n")), file=warnings_log, append=TRUE)
+                                     invokeRestart("muffleWarning")
+                                   }))
+      
       cat("... QC report finalized!\n\n")
       
       # Generate result heatmap image from report files
-      #bottomgr <- plot_heatmap(r, bottomgr)
-
       # Parse the html file and extract the heatmap node data
       doc =  htmlParse(r$report_file_HTML)
       src <-  xpathApply(doc, "//div[@id=\"heatmap\"]//img", xmlGetAttr, "src")
@@ -133,11 +135,10 @@ ProteoPipe_widget<-function(){
       plot(imscaled)
       dev.off()
 
-      g1 <<- gimage(tf) # Image reference needs to be global in GTK
+      g1 <<- gimage(tf)
       size(g1) <- c(480, 240)
       add(bottomgr, g1)
-
-
+      
       #Change visibilities
       visible(rightbgr) <- TRUE # Button group
       visible(b1) <- TRUE #Folder button
@@ -150,28 +151,28 @@ ProteoPipe_widget<-function(){
   }
   
   b2 <- gbutton("Run QC", container = rightbgr, handler = h2)
-
+  
   # html report button
-  h3 <- function(...){
+  h3 <- function(..., env = parent.frame()){
     browseURL(r$report_file_HTML)
   }
   b3 <- gbutton("html", container = rightbgr, handler = h3)
   
   # pdf report button
-  h4 <- function(...){
+  h4 <- function(..., env = parent.frame()){
     browseURL(r$report_file_PDF)
   }
   b4 <- gbutton("pdf", container = rightbgr, handler = h4)
   
   # Quit button
-  h5 <- function(...){
+  h5 <- function(..., env = parent.frame()){
     dispose(win, ...)
     quit(save="yes")
   }
   b5 <- gbutton("Quit", container = leftbgr, handler = h5)
   
   # Select .yaml file button
-  h6 <- function(...){
+  h6 <- function(..., env = parent.frame()){
     #Return list of file, perhaps empty
     Filters <- matrix(c("yaml", ".yaml",
                         "yaml", ".yaml"),
@@ -183,38 +184,3 @@ ProteoPipe_widget<-function(){
   
   
 } # end Calling
-
-# ###################
-# 
-# # Generate result heatmap image from report files
-# plot_heatmap <- function(r, bottomgr){
-# 
-#   # Parse the html file and extract the heatmap node data
-#   doc =  htmlParse(r$report_file_HTML)
-#   src <-  xpathApply(doc, "//div[@id=\"heatmap\"]//img", xmlGetAttr, "src")
-# 
-#   # Convert the png base64 image data through a temporary file connection
-#   base64 <- sub("data:image/png;base64,", "", unlist(src), fixed=TRUE)
-#   bin <- base64decode(base64)
-#   fileConn<-file(tf <- tempfile(fileext = ".png"), "wb")
-#   writeBin(bin, fileConn)
-#   close(fileConn)
-# 
-#   # Resize the image and plot it through a temporary file
-#   # Resizing is hardcoded for now since that works; graphics bug?
-#   imraw <- readImage(tf)
-#   imscaled <- resize(imraw, w = 480, h = 240)
-#   png(file=(tf <- tempfile(fileext = ".png")), bg = "transparent")
-#   plot(imscaled)
-#   dev.off()
-# 
-#   g1 <<- gimage(tf) # Image reference needs to be global in GTK
-#   size(g1) <- c(480, 240)
-#   add(bottomgr, g1)
-# 
-#   # return()
-# #  return_list <- list(bottomgr, ...)
-# #  return(return_list)
-#   return(bottomgr)
-# 
-# } # end Generating heatmap image
