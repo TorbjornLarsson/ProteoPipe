@@ -88,13 +88,15 @@ ProteoPipe_widget<-function(){
       
       # Default is provided yaml object, but use a provided one if in folder,
       # else let PTXQC generate one.
-      y <- list.files(path = dname, pattern = "([0-9A-Za-z]+)[.][y][a][m][l]")
+      file_list <- list.files(path = dname)
+      yaml_list <- file_list[grepl(".yaml", file_list)]
       
       # Use first in list
-      if (length(y) > 0) {
-        yp <<- file.path(normalizePath(dname,"/"), y[[1]])
-        cat("Generating file", yp, "\n")
-        yaml_list_object <- yaml.load_file(yp)
+      #if (length(y) > 0) {
+      if (length(yaml_list) > 0) {
+        yaml_path <<- file.path(normalizePath(dname,"/"), yaml_list[[1]])
+        cat("Generating file", yaml_path, "\n")
+        yaml_list_object <- yaml.load_file(yaml_path)
       } else if(length(fname) > 0) {
         cat("Generating file", fname, "\n")
         yaml_list_object <- yaml.load_file(fname)
