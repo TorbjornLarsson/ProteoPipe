@@ -3,10 +3,10 @@
 #based on MaxQuant analysis.
 
 
-ProteoPipe_widget<-function(){
+ProteoPipe_widget<-function(env = parent.frame()){
   
   require(stringi)
-  
+
   # Load widget graphics; assumes librarys loaded to the used R
   # Object references will be passed by reference frame (so is mutable) 
   require(gWidgets2)
@@ -19,10 +19,9 @@ ProteoPipe_widget<-function(){
   require(yaml)
   require(methods)
   
-  # Load html, image methods
-  require(XML)
-  require(base64enc)
+  # Load image methods
   require(EBImage)
+  require(pdftools)
   
   cat("-------------------------------------\n")
   cat("ProteoPipe v1 [June, 2019]\n")
@@ -30,15 +29,10 @@ ProteoPipe_widget<-function(){
   cat("Niklas Handin, et al.\n")
   cat("-------------------------------------\n")
   
-  # Default directory
+  # Defaults
+  currentenv <- environment()
   dname <- ""
-  
-  # Default white image put into temp file
-  plot.new()
-  rect(0, 0, 480, 240, border = NA)
-  png(file=(tf <- tempfile(fileext = ".png")), bg = "transparent")
-  dev.off()
-  
+
   #------------------Calling
   
   # GUI Widget
@@ -48,14 +42,42 @@ ProteoPipe_widget<-function(){
   # Split screen
   topgr <- ggroup(container = gr, horizontal = FALSE) # Used for folder select
   middlegr <- ggroup(container = gr) # Used for button groups
-  bottomgr <- ggroup(container = gr) # Used for result images
-
-  g1 <- gimage(tf) # Image reference needs to be global in GTK
-  size(g1) <- c(480, 240)
-  add(bottomgr, g1)
-
   leftbgr <- ggroup(container = middlegr, horizontal = FALSE) # Used for setup & quit buttons
   rightbgr <- ggroup(container = middlegr, horizontal = FALSE) # Used for run & results buttons
+  bottomgr <- ggroup(container = gr,  horizontal = FALSE, expand = T) # Used for result images
+  
+  img1 <- gpanedgroup(container = bottomgr)
+
+  img1left <- ggraphics(container = img1);
+  addHandlerChanged(img1left, handler = function(h, ..., envir=parent.frame()){
+    imscaled <- resize(imraw, w=gWidgets2::size(img1)[1], h=gWidgets2::size(img1)[2])
+    dev.set(img1left);plot(imscaled)
+   })
+  img1left <- dev.cur()
+  
+  img1right <- ggraphics(container = img1);
+  addHandlerChanged(img1right, handler = function(h, ..., envir=parent.frame()){
+    imscaled <- resize(imraw, w=gWidgets2::size(img1)[1], h=gWidgets2::size(img1)[2])
+    dev.set(img1right);plot(imscaled)
+  })
+  img1right <- dev.cur()
+
+  img2 <- gpanedgroup(container = bottomgr)
+  
+  img2left <- ggraphics(container = img2);
+  addHandlerChanged(img2left, handler = function(h, ..., envir=parent.frame()){
+    imscaled <- resize(imraw, w=gWidgets2::size(img2)[1], h=gWidgets2::size(img2)[2])
+    dev.set(img2left);plot(imscaled)
+  })
+  img2left <- dev.cur()
+  
+  img2right <- ggraphics(container = img2);
+  addHandlerChanged(img2right, handler = function(h, ..., envir=parent.frame()){
+    imscaled <- resize(imraw, w=gWidgets2::size(img2)[1], h=gWidgets2::size(img2)[2])
+    dev.set(img2right);plot(imscaled)
+  })
+  img2right <- dev.cur()
+  
   visible(middlegr) <- TRUE # Button groups
   visible(rightbgr) <- FALSE # Run button group
   visible(bottomgr) <- TRUE # Images group
@@ -63,14 +85,14 @@ ProteoPipe_widget<-function(){
   # Select folder textbox and button
   lbl_dname<- glabel("Selected txt folder to run Quality Control on: ", container = topgr)
   txt_dname <- gedit(dname, container = topgr)
-  
-  h1 <- function(...,  env = parent.frame()){
+
+  h1 <- function(...,  envir = parent.frame()){
     getwd()
-    dname <<- tk_choose.dir()
+    assign("dname", tk_choose.dir(), currentenv)
     svalue(txt_dname) <- dname
     
     #Change visibilities
-    delete(bottomgr, g1) # Previous result images
+    visible(bottomgr) <- FALSE # Previous result images
     visible(rightbgr) <- TRUE # Run button group
     visible(b1) <- FALSE #Folder button
     visible(b2) <- TRUE  #Run button
@@ -80,7 +102,7 @@ ProteoPipe_widget<-function(){
   b1 <- gbutton("Select folder", container = topgr, handler = h1)
   
   # Run button
-  h2 <- function(..., env = parent.frame()){
+  h2 <- function(..., envir = parent.frame()){
     cat("Running Quality Control on", dname, "\n")
     
     if (dname != ""){
@@ -94,7 +116,7 @@ ProteoPipe_widget<-function(){
       # Use first in list
       #if (length(y) > 0) {
       if (length(yaml_list) > 0) {
-        yaml_path <<- file.path(normalizePath(dname,"/"), yaml_list[[1]])
+        yaml_path <- file.path(normalizePath(dname,"/"), yaml_list[[1]])
         cat("Generating file", yaml_path, "\n")
         yaml_list_object <- yaml.load_file(yaml_path)
       } else if(length(fname) > 0) {
@@ -105,7 +127,7 @@ ProteoPipe_widget<-function(){
       
       # Report will generate lots of warnings that we want to catch to warnings log file.
       # Call handler for each warning as they come, to reenter try/catch loop.
-      tryCatch(withCallingHandlers(r <<- createReport(svalue(txt_dname), yaml_list_object), 
+      tryCatch(withCallingHandlers(assign("r", createReport(svalue(txt_dname), yaml_list_object), envir=globalenv()),
                                    # Warning object seems to have abbreviation 'w'
                                    # W is a single warning list object when run with try/catch calling handler
                                    warning=function(w) {
@@ -118,30 +140,25 @@ ProteoPipe_widget<-function(){
       cat("... QC report finalized!\n\n")
       
       # Generate result heatmap image from report files
-      # Parse the html file and extract the heatmap node data
-      doc =  htmlParse(r$report_file_HTML)
-      src <-  xpathApply(doc, "//div[@id=\"heatmap\"]//img", xmlGetAttr, "src")
+      # Plot it through a temporary file
+      bitmap <- pdf_render_page(r$report_file_PDF, page = 1, dpi = 300, antialias = "text")
+      png::writePNG(bitmap, assign("tf", tempfile(fileext = ".png")))
+      assign("imraw", readImage(tf), currentenv)
 
-      # Convert the png base64 image data through a temporary file connection
-      base64 <- sub("data:image/png;base64,", "", unlist(src), fixed=TRUE)
-      bin <- base64decode(base64)
-      fileConn<-file(tf <- tempfile(fileext = ".png"), "wb")
-      writeBin(bin, fileConn)
-      close(fileConn)
+      dev.set(img1left);plot(imraw)
+      png(file=(assign("tf", tempfile(fileext = ".png"), currentenv)), bg = "transparent")
+      
+      dev.set(img1right);plot(imraw)
+      png(file=(assign("tf", tempfile(fileext = ".png"), currentenv)), bg = "transparent")
 
-      # Resize the image and plot it through a temporary file
-      # Resizing is hardcoded for now since that works; graphics bug?
-      imraw <- readImage(tf)
-      imscaled <- resize(imraw, w = 480, h = 240)
-      png(file=(tf <- tempfile(fileext = ".png")), bg = "transparent")
-      plot(imscaled)
-      dev.off()
-
-      g1 <<- gimage(tf)
-      size(g1) <- c(480, 240)
-      add(bottomgr, g1)
+      dev.set(img2left);plot(imraw)
+      png(file=(assign("tf", tempfile(fileext = ".png"), currentenv)), bg = "transparent")
+      
+      dev.set(img2right);plot(imraw)
+      png(file=(assign("tf", tempfile(fileext = ".png"), currentenv)), bg = "transparent")
       
       #Change visibilities
+      visible(bottomgr) <- TRUE # New images
       visible(rightbgr) <- TRUE # Button group
       visible(b1) <- TRUE #Folder button
       visible(b2) <- FALSE #Run button
@@ -155,34 +172,29 @@ ProteoPipe_widget<-function(){
   b2 <- gbutton("Run QC", container = rightbgr, handler = h2)
   
   # html report button
-  h3 <- function(..., env = parent.frame()){
-    browseURL(r$report_file_HTML)
-  }
-  b3 <- gbutton("html", container = rightbgr, handler = h3)
-  
+  b3 <- gbutton("html", container = rightbgr, handler=function(...) browseURL(r$report_file_HTML))
+
   # pdf report button
-  h4 <- function(..., env = parent.frame()){
-    browseURL(r$report_file_PDF)
-  }
-  b4 <- gbutton("pdf", container = rightbgr, handler = h4)
+  b4 <- gbutton("pdf", container = rightbgr, handler=function(...) browseURL(r$report_file_PDF))
   
   # Quit button
-  h5 <- function(..., env = parent.frame()){
+  h5 <- function(..., envir = parent.frame()){
+    rm(tf)
+    dev.off()
     dispose(win, ...)
     quit(save="yes")
   }
   b5 <- gbutton("Quit", container = leftbgr, handler = h5)
   
   # Select .yaml file button
-  h6 <- function(..., env = parent.frame()){
+  h6 <- function(..., envir = parent.frame()){
     #Return list of file, perhaps empty
     Filters <- matrix(c("yaml", ".yaml",
                         "yaml", ".yaml"),
                       2, 2, byrow = TRUE)
-    fname <<- tk_choose.files(default = "", caption = "Select .yaml file",
-                              multi = FALSE, filters = Filters, index = 1)
+    assign("fname", tk_choose.files(default = "", caption = "Select .yaml file",
+                                                  multi = FALSE, filters = Filters, index = 1), envir=currentenv)
   }
   b6 <- gbutton("Select .yaml file", container = leftbgr, handler = h6)
-  
   
 } # end Calling

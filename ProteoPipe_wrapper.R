@@ -14,7 +14,7 @@
 #Warnings goes to log file.
 
 tryCatch({source("C:/Users/torla438/Work Folders/Documents/QC/ProteoPipe/ProteoPipe_widget.R")
-          warnings_log <<- file.path(normalizePath(Sys.getenv("USERPROFILE"), winslash='/'),
+          warnings_log <- file.path(normalizePath(Sys.getenv("USERPROFILE"), winslash='/'),
                                      "Work Folders", "Desktop", "ProteoPipe", "warnings.txt", fsep='/')
           cat("Warnings are logged in ", warnings_log, "\n")
           
