@@ -44,9 +44,9 @@ ProteoPipe_widget<-function(env = parent.frame()){
   middlegr <- ggroup(container = gr) # Used for button groups
   leftbgr <- ggroup(container = middlegr, horizontal = FALSE) # Used for setup & quit buttons
   rightbgr <- ggroup(container = middlegr, horizontal = FALSE) # Used for run & results buttons
-  bottomgr <- ggroup(container = gr,  horizontal = FALSE, expand = T) # Used for result images
+  bottomgr <- ggroup(container = gr,  horizontal = FALSE, expand = TRUE) # Used for result images
   
-  img1 <- gpanedgroup(container = bottomgr)
+  img1 <- gpanedgroup(container = bottomgr, expand=TRUE)
 
   img1left <- ggraphics(container = img1);
   addHandlerChanged(img1left, handler = function(h, ..., envir=parent.frame()){
@@ -62,7 +62,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
   })
   img1right <- dev.cur()
 
-  img2 <- gpanedgroup(container = bottomgr)
+  img2 <- gpanedgroup(container = bottomgr, expand=TRUE)
   
   img2left <- ggraphics(container = img2);
   addHandlerChanged(img2left, handler = function(h, ..., envir=parent.frame()){
