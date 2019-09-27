@@ -1,27 +1,31 @@
 #Summary:
 #A widget to generate a PTXQC Quality Control of MS^2 instrument
 #based on MaxQuant analysis.
+#Use require to put package info into the log file.
 
 
 ProteoPipe_widget<-function(env = parent.frame()){
   
-  require(stringi)
-
+  library(stringi)
+  
   # Load widget graphics; assumes librarys loaded to the used R
   # Object references will be passed by reference frame (so is mutable) 
-  require(gWidgets2)
+  library(gWidgets2)
   # To get the toolkit RGTk2, load library gWidgets2RGtk2 into R and accept installing GTK+
   options("guiToolkit"="RGtk2")
-  require(tcltk2)
+  library(tcltk2)
   
   # Load Quality Control methods
-  require(PTXQC)
-  require(yaml)
-  require(methods)
+  library(PTXQC)
+  library(yaml)
+  library(methods)
   
   # Load image methods
-  require(EBImage)
-  require(pdftools)
+  library(png)
+  library(EBImage)
+  library(pdftools)
+  library(mzR)
+  library(MSnbase)
   
   cat("-------------------------------------\n")
   cat("ProteoPipe v1 [June, 2019]\n")
@@ -30,15 +34,16 @@ ProteoPipe_widget<-function(env = parent.frame()){
   cat("-------------------------------------\n")
   
   # Defaults
+  gcinfo(FALSE)
   currentenv <- environment()
   dname <- ""
 
   #------------------Calling
   
   # GUI Widget
-  win <- gwindow("ProteoPipe")
-  gr <- ggroup(container = win, horizontal = FALSE)
-  
+  win <- gwindow("ProteoPipe") # Cannot make this invisible and get the GTK graphics mounted correctly
+  gr <- ggroup(container = win, horizontal = FALSE, visible = FALSE)
+
   # Split screen
   topgr <- ggroup(container = gr, horizontal = FALSE) # Used for folder select
   middlegr <- ggroup(container = gr) # Used for button groups
@@ -48,13 +53,14 @@ ProteoPipe_widget<-function(env = parent.frame()){
   
   img1 <- gpanedgroup(container = bottomgr, expand=TRUE)
 
+  # 4 plots w/ handlers for rescaling when clicked; device handling is primitive since GTK breaks easily.
   img1left <- ggraphics(container = img1);
   addHandlerChanged(img1left, handler = function(h, ..., envir=parent.frame()){
     imscaled <- resize(imraw, w=gWidgets2::size(img1)[1], h=gWidgets2::size(img1)[2])
     dev.set(img1left);plot(imscaled)
    })
   img1left <- dev.cur()
-  
+
   img1right <- ggraphics(container = img1);
   addHandlerChanged(img1right, handler = function(h, ..., envir=parent.frame()){
     imscaled <- resize(imraw, w=gWidgets2::size(img1)[1], h=gWidgets2::size(img1)[2])
@@ -70,18 +76,19 @@ ProteoPipe_widget<-function(env = parent.frame()){
     dev.set(img2left);plot(imscaled)
   })
   img2left <- dev.cur()
-  
+
   img2right <- ggraphics(container = img2);
   addHandlerChanged(img2right, handler = function(h, ..., envir=parent.frame()){
     imscaled <- resize(imraw, w=gWidgets2::size(img2)[1], h=gWidgets2::size(img2)[2])
     dev.set(img2right);plot(imscaled)
   })
   img2right <- dev.cur()
-  
+
   visible(middlegr) <- TRUE # Button groups
   visible(rightbgr) <- FALSE # Run button group
   visible(bottomgr) <- TRUE # Images group
-  
+  visible(gr) <- TRUE
+
   # Select folder textbox and button
   lbl_dname<- glabel("Selected txt folder to run Quality Control on: ", container = topgr)
   txt_dname <- gedit(dname, container = topgr)
@@ -94,33 +101,120 @@ ProteoPipe_widget<-function(env = parent.frame()){
     #Change visibilities
     visible(bottomgr) <- FALSE # Previous result images
     visible(rightbgr) <- TRUE # Run button group
-    visible(b1) <- FALSE #Folder button
-    visible(b2) <- TRUE  #Run button
-    visible(b3) <- FALSE #html button
-    visible(b4) <- FALSE #pdf button
+    visible(b1) <- TRUE # Folder button; keep visible in case user selects wrong folder
+    visible(b2) <- TRUE  # Run button
+    visible(b3) <- FALSE # html button
+    visible(b4) <- FALSE # pdf button
   }
   b1 <- gbutton("Select folder", container = topgr, handler = h1)
   
   # Run button
   h2 <- function(..., envir = parent.frame()){
+    enabled(b1) <- FALSE # Folder button
     cat("Running Quality Control on", dname, "\n")
-    
+    gcinfo(TRUE) # Image files are large, we want to see the garbage collection interruptions
+
     if (dname != ""){
       cat("... please wait...\n\n")
+      file_list <- list.files(path = dname)
+      
+      ## Showing raw data image
+      
+      # Use first raw file in list
+      # --- Implement return else
+      raw_list <- file_list[grepl(".raw", file_list)]
+      if (length(raw_list) > 0) {
+        raw_path <- file.path(normalizePath(dname,"/"), raw_list[[1]])
+        cat("Found .raw file:", raw_path, "\n")
+      } else {
+        e <- simpleError("Found no .raw file.")
+        stop(e)
+      }
+      
+      # Use msconvert for converting to mzXML
+      # Filter out MS1 spectra
+      cat("Converting MS1/MS2 .raw file to MS1 .mzXML file for plotting purposes\n")
+      cat("... this may take a while ...\n\n")
+  
+      cmd <- "C:\\R LocalData\\QC\\ProteoWizard 3.0.19246.075ea16f5 64-bit\\msconvert.exe"
+      arg <- stri_join(shQuote(raw_path), "--filter", shQuote("msLevel 1"), "--mzXML -o", shQuote(normalizePath(dname)), sep=' ')
+      system2(cmd, arg)
+      
+      # Update file list
+      # Use first mzXML file in list
+      # --- Implement stop w/ error else ---
+      file_list <- list.files(path = dname)
+      mzxml_list <- file_list[grepl(".mzXML", file_list)]
+      if (length(mzxml_list) > 0) {
+        mzxml_path <- file.path(normalizePath(dname,"/"), mzxml_list[[1]])
+        cat("Generating raw MS1 peak image data from .mzXML file:", mzxml_path, "\n")
+        cat("... this may take a while ...\n")
+      } else {
+        e <- simpleError("Found no .mzXML file.")
+        stop(e)
+      }
+      
+      # Use MSnbase methods to extract MS retention times and peak m/z values
+      # Remove large files after use
+      cat("... extracting retention times and m/z ...\n")
+      basename(mzxml_path)
+      ms_msl1 <- readMSData(mzxml_path, mode="onDisk")
+      print(ms_msl1)
+      
+      ms_rt <- rtime(ms_msl1)
+      ms_mz <- mz(ms_msl1)
+      rm(ms_msl1)
+
+      cat("Removing mzXML file.\n\n")
+      file.remove(mzxml_path)
+      
+      # Plot through list function
+      # To speed up, don't use plot vector graphics but bitmap in a png file in memory
+      # and assign data each loop
+      maxrt <- max(ms_rt)
+      
+      plot.new()
+      plt <- dev.cur()
+      png(file=(assign("tf", tempfile(fileext = ".png"))), bg = "transparent")
+      plot(c(0,2000), c(0,1.1*maxrt/60), type="n", xlab="m/z", ylab="rt [min]")
+      
+      cat("... peak index count will follow ...\n")
+      lapply(seq(8, length(ms_rt), 8), function(i, envir = parent.frame()) {
+        print(i)
+        assign("plt", points.default(unlist(ms_mz[[i]]), rep(ms_rt[[i]]/60, length(ms_mz[[i]])), type="p", col="green", pch='.'))
+      })
+      dev.off()
+      dev.set(img1left);
+      plot(readImage(tf))
+      cat("... raw peak data done.\n")
+      rm(tf)
+      gcinfo(FALSE) # Quit showing the garbage business until next image
+
+      # Remove the previous run images
+      dev.set(img1right)
+      plot(0,type='n',axes=FALSE,ann=FALSE)
+      
+      dev.set(img2left)
+      plot(0,type='n',axes=FALSE,ann=FALSE)
+      
+      dev.set(img2right)
+      plot(0,type='n',axes=FALSE,ann=FALSE)
+      
+      visible(bottomgr) <- TRUE # New images
+      
+      ## Running PTXQC
       
       # Default is provided yaml object, but use a provided one if in folder,
       # else let PTXQC generate one.
-      file_list <- list.files(path = dname)
       yaml_list <- file_list[grepl(".yaml", file_list)]
       
       # Use first in list
-      #if (length(y) > 0) {
       if (length(yaml_list) > 0) {
         yaml_path <- file.path(normalizePath(dname,"/"), yaml_list[[1]])
-        cat("Generating file", yaml_path, "\n")
+        cat("Found .yaml file: ", yaml_path, "\n")
         yaml_list_object <- yaml.load_file(yaml_path)
       } else if(length(fname) > 0) {
-        cat("Generating file", fname, "\n")
+        cat("Generating .yaml file: ", fname, "\n")
         yaml_list_object <- yaml.load_file(fname)
       }
       else {yaml_list_object <- list()}
@@ -142,30 +236,22 @@ ProteoPipe_widget<-function(env = parent.frame()){
       # Generate result heatmap image from report files
       # Plot it through a temporary file
       bitmap <- pdf_render_page(r$report_file_PDF, page = 1, dpi = 300, antialias = "text")
-      png::writePNG(bitmap, assign("tf", tempfile(fileext = ".png")))
+      writePNG(bitmap, assign("tf", tempfile(fileext = ".png")))
       assign("imraw", readImage(tf), currentenv)
+      rm(tf)
 
-      dev.set(img1left);plot(imraw)
-      png(file=(assign("tf", tempfile(fileext = ".png"), currentenv)), bg = "transparent")
-      
       dev.set(img1right);plot(imraw)
-      png(file=(assign("tf", tempfile(fileext = ".png"), currentenv)), bg = "transparent")
-
       dev.set(img2left);plot(imraw)
-      png(file=(assign("tf", tempfile(fileext = ".png"), currentenv)), bg = "transparent")
-      
       dev.set(img2right);plot(imraw)
-      png(file=(assign("tf", tempfile(fileext = ".png"), currentenv)), bg = "transparent")
-      
+
       #Change visibilities
-      visible(bottomgr) <- TRUE # New images
       visible(rightbgr) <- TRUE # Button group
-      visible(b1) <- TRUE #Folder button
-      visible(b2) <- FALSE #Run button
-      visible(b3) <- TRUE #html button
-      visible(b4) <- TRUE #pdf button
-      visible(b5) <- TRUE #Quit button; always visible
-      visible(b6) <- TRUE  #.yaml button; always visible
+      enabled(b1) <- TRUE # Folder button
+      visible(b2) <- FALSE # Run button
+      visible(b3) <- TRUE # html button
+      visible(b4) <- TRUE # pdf button
+      visible(b5) <- TRUE # Quit button; always visible
+      visible(b6) <- TRUE  # .yaml button; always visible
     }
   }
   
@@ -179,10 +265,9 @@ ProteoPipe_widget<-function(env = parent.frame()){
   
   # Quit button
   h5 <- function(..., envir = parent.frame()){
-    rm(tf)
-    dev.off()
+    graphics.off()
     dispose(win, ...)
-    quit(save="yes")
+    quit()
   }
   b5 <- gbutton("Quit", container = leftbgr, handler = h5)
   

@@ -12,8 +12,10 @@
 #Output:
 #Errors goes to console.
 #Warnings goes to log file.
+#Garbage collection is the generic, optimized R scheduling.
 
 tryCatch({source("C:/Users/torla438/Work Folders/Documents/QC/ProteoPipe/ProteoPipe_widget.R")
+          console <- TRUE
           warnings_log <- file.path(normalizePath(Sys.getenv("USERPROFILE"), winslash='/'),
                                      "Work Folders", "Desktop", "ProteoPipe", "warnings.txt", fsep='/')
           cat("Warnings are logged in ", warnings_log, "\n")
@@ -31,5 +33,9 @@ tryCatch({source("C:/Users/torla438/Work Folders/Documents/QC/ProteoPipe/ProteoP
           })
 
           # Keep console open in background for messaging
-          while (1){}
+          repeat{
+            if (!console) {}
+          }
 })
+
+
