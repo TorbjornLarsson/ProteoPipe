@@ -16,9 +16,9 @@
 
 tryCatch({source("C:/Users/torla438/Work Folders/Documents/QC/ProteoPipe/ProteoPipe_widget.R")
           console <- TRUE
-          warnings_log <- file.path(normalizePath(Sys.getenv("USERPROFILE"), winslash='/'),
-                                     "Work Folders", "Desktop", "ProteoPipe", "warnings.txt", fsep='/')
-          cat("Warnings are logged in ", warnings_log, "\n")
+
+          warnings_log <- file.path(Sys.getenv("USERPROFILE"), "Work Folders", "Desktop", "ProteoPipe", "warnings.txt", fsep="\\")
+         cat("Warnings are logged in ", warnings_log, "\n")
           
           # Call handler for each warning as they come, to reenter try/catch loop.
           withCallingHandlers(ProteoPipe_widget(),
