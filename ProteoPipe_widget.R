@@ -7,6 +7,7 @@
 ProteoPipe_widget<-function(env = parent.frame()){
   
   library(stringi)
+  library(BiocGenerics)
   
   # Load widget graphics; assumes librarys loaded to the used R
   # Object references will be passed by reference frame (so is mutable) 
@@ -96,19 +97,19 @@ ProteoPipe_widget<-function(env = parent.frame()){
   # Generate reference images from file
   # Plot through a temporary file
   dev.set(img2left)
-  bitmap <- pdf_render_page(file.path(dname, ref_raw, fsep="\\"), dpi = 300, antialias = "text")
+  bitmap <- pdf_render_page(file.path(dname, ref_raw), dpi = 300, antialias = "text")
   writePNG(bitmap, assign("tf", tempfile(fileext = ".png")))
   plot(assign("im2l", readImage(tf), currentenv))
   
   dev.set(img2right)
-  bitmap <- pdf_render_page(file.path(dname, ref_results, fsep="\\"), dpi = 300, antialias = "text")
+  bitmap <- pdf_render_page(file.path(dname, ref_results), dpi = 300, antialias = "text")
   writePNG(bitmap, assign("tf", tempfile(fileext = ".png")))
   plot(assign("im2r", readImage(tf), currentenv))
   
   rm(tf)
 
   # Select folder textbox and button
-  lbl_dname<- glabel("Selected txt folder to run Quality Control on: ", container = topgr)
+  lbl_dname<- glabel("Selected folder to run Quality Control on: ", container = topgr)
   txt_dname <- gedit(dname, container = topgr)
  
   h1 <- function(...,  envir = parent.frame()){
@@ -147,129 +148,125 @@ ProteoPipe_widget<-function(env = parent.frame()){
       return()
     }
     
-    ## Plotting .raw MS1 retention times and peak m/z values 
-    
-    gcinfo(TRUE) # Image files are large, we want to see the garbage collection interruptions
-    
-    # Use msconvert for converting to mzXML
-    # Filter out MS1 spectra
-    cat("Converting MS1/MS2 .raw file to MS1 .mzXML file for plotting purposes\n")
-    
-    cmd <- "C:\\Users\\torla438\\Work Folders\\Desktop\\ProteoPipe\\ProteoWizard 3.0.19246.075ea16f5 64-bit\\msconvert.exe"
-    arg <- stri_join(shQuote(raw_path), "--verbose", "--filter", shQuote("msLevel 1"), "--mzXML -o", shQuote(normalizePath(dname)), sep=' ')
-    
-    system2(cmd, arg)
+    ## Plotting .raw MS1 retention times and peak m/z values
 
-    # Update file list
-    # Use first mzXML file in list
-    # --- Implement stop w/ error else ---
-    file_list <- list.files(path = dname)
-    mzxml_list <- file_list[grepl(".mzXML", file_list)]
-    if (length(mzxml_list) > 0) {
-      mzxml_path <- file.path(normalizePath(dname, "\\"), mzxml_list[[1]], fsep="\\")
-      cat("Generating raw MS1 peak image data from .mzXML file:", mzxml_path, "\n")
-    } else {
-      e <- simpleError("Found no .mzXML file.")
-      stop(e)
-    }
+    # gcinfo(TRUE) # Image files are large, we want to see the garbage collection interruptions
+    # 
+    # # Use msconvert for converting to mzXML
+    # # Filter out MS1 spectra
+    # cat("Converting MS1/MS2 .raw file to MS1 .mzXML file for plotting purposes\n")
+    # 
+    # cmd <- "C:\\Users\\torla438\\Work Folders\\Desktop\\ProteoPipe\\ProteoWizard 3.0.19246.075ea16f5 64-bit\\msconvert.exe"
+    # arg <- stri_join(shQuote(raw_path), "--verbose", "--filter", shQuote("msLevel 1"), "--mzXML -o", shQuote(normalizePath(dname)), sep=' ')
+    # 
+    # system2(cmd, arg)
+    # 
+    # # Update file list
+    # # Use first mzXML file in list
+    # # --- Implement stop w/ error else ---
+    # file_list <- list.files(path = dname)
+    # mzxml_list <- file_list[grepl(".mzXML", file_list)]
+    # if (length(mzxml_list) > 0) {
+    #   mzxml_path <- file.path(normalizePath(dname, "\\"), mzxml_list[[1]], fsep="\\")
+    #   cat("Generating raw MS1 peak image data from .mzXML file:", mzxml_path, "\n")
+    # } else {
+    #   e <- simpleError("Found no .mzXML file.")
+    #   stop(e)
+    # }
+    # 
+    # # Use MSnbase methods to extract MS retention times and peak m/z values
+    # # Remove large files after use
+    # cat("Extracting retention times and m/z data.\n")
+    # basename(mzxml_path)
+    # ms_msl1 <- readMSData(mzxml_path, mode="onDisk")
+    # print(ms_msl1)
+    # 
+    # ms_rt <- rtime(ms_msl1)
+    # ms_mz <- mz(ms_msl1)
+    # rm(ms_msl1)
+    # 
+    # # Plot through list function
+    # # To speed up, don't use plot vector graphics but bitmap in a png file in memory
+    # # and assign data each loop
+    # maxrt <- max(ms_rt)
+    # 
+    # plot.new()
+    # plt <- dev.cur()
+    # png(file=(assign("tf", tempfile(fileext = ".png"))), bg = "transparent")
+    # plot(c(0,2000), c(0,1.1*maxrt/60), type="n", xlab="m/z", ylab="rt [min]")
+    # 
+    # cat("Building spectra image.\n")
+    # len <- length(ms_rt)
+    # lapply(seq(8, len, 8), function(i, envir = parent.frame()) {
+    #   cat("\r", i, "/", len)
+    #   assign("plt", points.default(unlist(ms_mz[[i]]), rep(ms_rt[[i]]/60, length(ms_mz[[i]])), type="p", col="green", pch='.'))
+    # })
+    # cat("\n")
+    # dev.off()
+    # dev.set(img1left);
+    # plot(assign("im1l", readImage(tf), currentenv))
+    # rm(tf)
+    # gcinfo(FALSE) # Quit showing the garbage business until next image
+    # 
+    # # Remove the previous run results image
+    # dev.set(img1right)
+    # plot(0,type='n',axes=FALSE,ann=FALSE)
+    # 
+    # visible(bottomgr) <- TRUE # New images
+    # 
+    # ## Running MaxQuant 1.6.3.4
+    # 
+    # # MaxQuant command line interface has no method to call .raw files, and no verbose mode.
+    # # Raw file paths are specified in mqpar.xml; replace the *.raw path with the new.
+    # # Use a file connection and textfile operations for ease and speed.
+    # 
+    # replace_txt <- stri_join("      <string>", raw_path, "</string>")
+    # 
+    # mqpar_path <- "C:\\Users\\torla438\\Work Folders\\Desktop\\ProteoPipe\\mqpar.xml"
+    # con <- file(mqpar_path)
+    # 
+    # txt <- readLines(con)
+    # txt[[grep(".raw", txt)]] <- replace_txt
+    # 
+    # writeLines(txt, con)
+    # close(con)
+    # 
+    # # Then we build the R pipe command and call MaxQuant from the command line.
+    # mq_path <- "C:\\Users\\torla438\\Work Folders\\Desktop\\ProteoPipe\\MaxQuant_1.6.3.4\\MaxQuant\\bin\\MaxQuantCmd.exe"
+    # system2(mq_path, shQuote(mqpar_path))
 
-    # Use MSnbase methods to extract MS retention times and peak m/z values
-    # Remove large files after use
-    cat("Extracting retention times and m/z data.\n")
-    basename(mzxml_path)
-    ms_msl1 <- readMSData(mzxml_path, mode="onDisk")
-    print(ms_msl1)
-
-    ms_rt <- rtime(ms_msl1)
-    ms_mz <- mz(ms_msl1)
-    rm(ms_msl1)
-
-    # Plot through list function
-    # To speed up, don't use plot vector graphics but bitmap in a png file in memory
-    # and assign data each loop
-    maxrt <- max(ms_rt)
-
-    plot.new()
-    plt <- dev.cur()
-    png(file=(assign("tf", tempfile(fileext = ".png"))), bg = "transparent")
-    plot(c(0,2000), c(0,1.1*maxrt/60), type="n", xlab="m/z", ylab="rt [min]")
-
-    cat("Building spectra image.\n")
-    len <- length(ms_rt)
-    lapply(seq(8, len, 8), function(i, envir = parent.frame()) {
-      cat("\r", i, "/", len)
-      assign("plt", points.default(unlist(ms_mz[[i]]), rep(ms_rt[[i]]/60, length(ms_mz[[i]])), type="p", col="green", pch='.'))
-    })
-    cat("\n")
-    dev.off()
-    dev.set(img1left);
-    plot(assign("im1l", readImage(tf), currentenv))
-    rm(tf)
-    gcinfo(FALSE) # Quit showing the garbage business until next image
-    
-    # Remove the previous run results image
-    dev.set(img1right)
-    plot(0,type='n',axes=FALSE,ann=FALSE)
-    
-    visible(bottomgr) <- TRUE # New images
-    
-    ## Running MaxQuant 1.6.3.4
-    
-    # MaxQuant command line interface has no method to call .raw files, and no verbose mode.
-    # Raw file paths are specified in mqpar.xml; replace the *.raw path with the new.
-    # Use a file connection and textfile operations for ease and speed.
-    
-    replace_txt <- stri_join("      <string>", raw_path, "</string>")
-
-    mqpar_path <- "C:\\Users\\torla438\\Work Folders\\Desktop\\ProteoPipe\\mqpar.xml"
-    con <- file(mqpar_path)
-    
-    txt <- readLines(con)
-    txt[[grep(".raw", txt)]] <- replace_txt
-    
-    writeLines(txt, con)
-    close(con)
-    
-    # Then we build the R pipe command and call MaxQuant from the command line.
-    mq_path <- "C:\\Users\\torla438\\Work Folders\\Desktop\\ProteoPipe\\MaxQuant_1.6.3.4\\MaxQuant\\bin\\MaxQuantCmd.exe"
-    system2(mq_path, shQuote(mqpar_path))
-    
     ## Running PTXQC
-    
+
     # Default is provided yaml object, but use a provided one if in folder,
     # else let PTXQC generate one.
-#    yaml_path <- file.path(normalizePath(Sys.getenv("USERPROFILE"), winslash='/'), "Work Folders", "Desktop", "ProteoPipe", "Template_QC_Hela_digests_1h_400_Niklas.yaml, fsep='/')
-
     yaml_path <- file.path(Sys.getenv("USERPROFILE"), "Work Folders", "Desktop", "ProteoPipe", "Template_QC_Hela_digests_1h_400_Niklas.yaml", fsep="\\")
-                                                
+
     yaml_list <- file_list[grepl(".yaml", file_list)]
     # Use first in list
     if (length(yaml_list) > 0) {
-      #yaml_path <- file.path(normalizePath(dname,"/"), yaml_list[[1]])
       yaml_path <- file.path(normalizePath(dname, "\\"), yaml_list[[1]], fsep="\\")
     }
-    
+
     if(length(yaml_path) > 0) {
       yaml_list_object <- yaml.load_file(yaml_path)
       cat("Loaded .yaml file: ", yaml_path, "\n")
     }
     else {yaml_list_object <- list()}
-    
+
     # Report will generate lots of warnings that we want to catch to warnings log file.
     # Call handler for each warning as they come, to reenter try/catch loop.
-#    tryCatch(withCallingHandlers(assign("r", createReport(svalue(txt_dname), yaml_list_object), envir=currentenv#),
     txt_folder <- file.path(dname, "combined", "txt", fsep="\\")
     tryCatch(withCallingHandlers(assign("r", createReport(txt_folder, yaml_list_object), envir=currentenv),
                                  # Warning object seems to have abbreviation 'w'
                                  # W is a single warning list object when run with try/catch calling handler
                                  warning=function(w) {
                                    # Note: conditionMessage(w) does that too
-                                   write(capture.output(cat("createReport() warning:", conditionMessage(w), 
+                                   write(capture.output(cat("createReport() warning:", conditionMessage(w),
                                                             "\n")), file=warnings_log, append=TRUE)
                                    invokeRestart("muffleWarning")
                                  }))
     cat("... QC report finalized!\n\n")
-    
+
     # Generate result image from report files
     # Plot it through a temporary file
     dev.set(img1right)
@@ -280,24 +277,30 @@ ProteoPipe_widget<-function(env = parent.frame()){
 
     ## Creating folder labeled date
     cat("Creating result folder.\n")
-    folder_path <- file.path(dname, Sys.Date())
+    assign("folder_path", file.path(dname, Sys.Date()), currentenv)
     
     # If existing, reuse; else create
     if (!dir.exists(folder_path)) dir.create(folder_path)
     
-    # Copy report files; suppress warnings for missing files since it depends on test 
-    suppressWarnings(file.copy(unlist(r), folder_path, overwrite = TRUE))
-    suppressWarnings(file.copy(unlist(r), folder_path, overwrite = TRUE))
-    #suppressWarnings(file.copy(unlist(r), folder_path, overwrite = TRUE))
-    
+    # # Copy raw & report files; suppress warnings for missing PTXQC files since it depends on test
+    # file.copy(raw_path, folder_path)
+    # suppressWarnings(file.copy(unlist(r), folder_path, overwrite = TRUE))
+    # file.copy(file.path(dname, "combined", "proc"), folder_path, recursive = TRUE)
+    # file.copy(file.path(dname, "combined", "txt"), folder_path, recursive = TRUE)
+    # 
     # ## Removing work files; suppress warnings for attempts to remove listed folders
-    # file_list <- list.files(path = dname)
-    # suppressWarnings(file.remove(file.path(normalizePath(dname), file_list)))
-    # cat("Removed work files.\n")
+    # suppressWarnings(file.remove(unlist(r)))
+    # unlink(file.path(dname, "combined"), recursive = TRUE)
+    # raw_name <- stri_split_fixed(raw_list[[1]], '.')[[1]][1]
+    # unlink(file.path(dname, raw_name[[1]]), recursive = TRUE)
+    # file.remove(file.path(dname, stri_join(raw_name[[1]], ".raw")))
+    # file.remove(file.path(dname, stri_join(raw_name[[1]], ".mzXML")))
+    # file.remove(file.path(dname, stri_join(raw_name[[1]], ".index")))
+
+    cat("Removed work files.\n")
     cat("All Work done!\n\n")
     
     # Change visibilities
-    visible(rightbgr) <- TRUE # Button group
     enabled(b1) <- TRUE # Folder button
     visible(b2) <- FALSE # Run button
     enabled(b2) <- TRUE # Run button
@@ -309,10 +312,10 @@ ProteoPipe_widget<-function(env = parent.frame()){
   b2 <- gbutton("Run QC", container = rightbgr, handler = h2)
   
   # html report button
-  b3 <- gbutton("html", container = rightbgr, handler=function(...) browseURL(r$report_file_HTML))
+  b3 <- gbutton("html", container = rightbgr, handler=function(...) browseURL(file.path(folder_path, basename(r$report_file_HTML))))
 
   # pdf report button
-  b4 <- gbutton("pdf", container = rightbgr, handler=function(...) browseURL(r$report_file_PDF))
+  b4 <- gbutton("pdf", container = rightbgr, handler=function(...) browseURL(file.path(folder_path, basename(r$report_file_PDF))))
   
   # Quit button
   h5 <- function(..., envir = parent.frame()){
