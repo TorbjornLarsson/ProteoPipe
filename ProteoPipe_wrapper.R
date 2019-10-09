@@ -15,27 +15,28 @@
 #Garbage collection is the generic, optimized R scheduling.
 
 tryCatch({source("C:/Users/torla438/Work Folders/Documents/QC/ProteoPipe/ProteoPipe_widget.R")
-          console <- TRUE
-
-          warnings_log <- file.path(Sys.getenv("USERPROFILE"), "Work Folders", "Desktop", "ProteoPipe", "warnings.txt", fsep="\\")
-         cat("Warnings are logged in ", warnings_log, "\n")
-          
-          # Call handler for each warning as they come, to reenter try/catch loop.
-          withCallingHandlers(ProteoPipe_widget(),
-                              # Warning object seems to have abbreviation 'w'
-                              # W is a single warning list object when run with try/catch calling handler
-                              warning=function(w) {
-                                # Capture text message of warning condition object, without showing in console
-                                # Note: conditionMessage(w) does that too
-                                write(capture.output(cat("ProteoPipe_widget() warning:", conditionMessage(w), 
-                                                         "\n")), file=warnings_log, append=TRUE)
-                                invokeRestart("muffleWarning")
-          })
-
-          # Keep console open in background for messaging
-          repeat{
-            if (!console) {}
-          }
+  
+  # Defaults
+  console <- TRUE # Do-while (repeat) console open flag
+  text_log <- file.path(Sys.getenv("USERPROFILE"), "Work Folders", "Desktop", "ProteoPipe", "log.txt", fsep="\\")
+  warnings_log <- file.path(Sys.getenv("USERPROFILE"), "Work Folders", "Desktop", "ProteoPipe", "warnings.txt", fsep="\\")
+  
+  # Call handler for each warning as they come, to reenter try/catch loop.
+  withCallingHandlers(capture.output(ProteoPipe_widget(), file = text_log, split = TRUE),
+                      # Warning object seems to have abbreviation 'w'
+                      # W is a single warning list object when run with try/catch calling handler
+                      warning=function(w) {
+                        # Capture text message of warning condition object, without showing in console
+                        # Note: conditionMessage(w) does that too
+                        write(capture.output(cat("ProteoPipe_widget() warning:", conditionMessage(w), 
+                                                 "\n")), file=warnings_log, append=TRUE)
+                        invokeRestart("muffleWarning")
+                      })
+  
+  # Keep console open in background for messaging
+  repeat{
+    if (!console) {}
+  }
 })
 
 
