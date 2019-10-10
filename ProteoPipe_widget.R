@@ -15,7 +15,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
   # To get the toolkit RGTk2, load library gWidgets2RGtk2 into R and accept installing GTK+
   options("guiToolkit"="RGtk2")
   library(tcltk2)
-  
+
   # Load Quality Control methods
   library(PTXQC)
   library(yaml)
@@ -38,98 +38,42 @@ ProteoPipe_widget<-function(env = parent.frame()){
   gcinfo(FALSE)
   currentenv <- environment()
   dname <- "C:\\Users\\torla438\\Work Folders\\Desktop\\ProteoPipe"
-  ref_raw <- "raw.pdf"
-  ref_results <- "results.pdf"
+  ref_raw <- "raw.png"
+  ref_results <- "results.png"
   cat("Console texts are logged in ", text_log, "\n")
   cat("Warnings are logged in ", warnings_log, "\n")
 
   #------------------Calling
   
-  # GUI Widget
+  ## GUI Widget
+  graphics.off()
+  par(mar=c(1,1,1,1))
   win <- gwindow("ProteoPipe", width=960, height=960, visible = FALSE)
   gr <- ggroup(container = win, horizontal = FALSE, visible = FALSE)
+  
+  gr1 <- ggroup(container = gr, horizontal = FALSE) # Used for folder select
+  gr2 <- ggroup(container = gr) # Used for buttons
+  gr3 <- ggroup(container = gr, horizontal = FALSE) # Used for images
+  gr31 <- ggroup(container = gr3) # Label group
+  gr32 <- ggroup(container = gr3) # Run group
+  gr33 <- ggroup(container = gr3) # Result group
+  gr34 <- ggroup(container = gr3) # Buttons group
 
-  # Split screen
-  topgr <- ggroup(container = gr, horizontal = FALSE) # Used for folder select
-  middlegr <- ggroup(container = gr) # Used for button groups
-  leftbgr <- ggroup(container = middlegr, horizontal = FALSE) # Used for setup & quit buttons
-  rightbgr <- ggroup(container = middlegr, horizontal = FALSE) # Used for run & results buttons
-  bottomgr <- ggroup(container = gr,  horizontal = FALSE, expand = TRUE) # Used for result images
+  ## Select folder textbox and button
+  fr1 <- gframe("", container = gr1)
+  lbl_dname<- glabel("Selected folder to run Quality Control on: ", container = fr1)
+  txt_dname <- gedit(dname, container = fr1)
 
-  img1 <- gpanedgroup(container = bottomgr, expand=TRUE)
-  visible(win) <- TRUE # Must make this visible to get the GTK graphics mounted correctly.
-
-  # 4 plots w/ handlers for rescaling when clicked; device handling is primitive since GTK breaks easily.
-  img1left <- ggraphics(container = img1);
-  addHandlerChanged(img1left, handler = function(h, ..., envir=parent.frame()){
-    imscaled <- resize(im1l, w=gWidgets2::size(img1)[1], h=gWidgets2::size(img1)[2])
-    dev.set(img1left);plot(imscaled)
-   })
-  img1left <- dev.cur()
-
-  img1right <- ggraphics(container = img1);
-  addHandlerChanged(img1right, handler = function(h, ..., envir=parent.frame()){
-    imscaled <- resize(im1r, w=gWidgets2::size(img1)[1], h=gWidgets2::size(img1)[2])
-    dev.set(img1right);plot(imscaled)
-  })
-  img1right <- dev.cur()
-
-  img2 <- gpanedgroup(container = bottomgr, expand=TRUE)
-  
-  img2left <- ggraphics(container = img2);
-  addHandlerChanged(img2left, handler = function(h, ..., envir=parent.frame()){
-    imscaled <- resize(im2l, w=gWidgets2::size(img2)[1], h=gWidgets2::size(img2)[2])
-    dev.set(img2left);plot(imscaled)
-  })
-  img2left <- dev.cur()
-
-  img2right <- ggraphics(container = img2);
-  addHandlerChanged(img2right, handler = function(h, ..., envir=parent.frame()){
-    imscaled <- resize(im2r, w=gWidgets2::size(img2)[1], h=gWidgets2::size(img2)[2])
-    dev.set(img2right);plot(imscaled)
-  })
-  img2right <- dev.cur()
-  
-  # Show empty respectively reference images
-  dev.set(img1left)
-  plot(0,type='n',axes=FALSE,ann=FALSE)
-  
-  dev.set(img1right)
-  plot(0,type='n',axes=FALSE,ann=FALSE)
-  
-  dev.set(img2left)
-  plot(0,type='n',axes=FALSE,ann=FALSE)
-  
-  dev.set(img2right)
-  plot(0,type='n',axes=FALSE,ann=FALSE)
-  
-  # Generate reference images from file
-  # Plot through a temporary file
-  dev.set(img2left)
-  bitmap <- pdf_render_page(file.path(dname, ref_raw), dpi = 300, antialias = "text")
-  writePNG(bitmap, assign("tf", tempfile(fileext = ".png")))
-  plot(assign("im2l", readImage(tf), currentenv))
-  
-  dev.set(img2right)
-  bitmap <- pdf_render_page(file.path(dname, ref_results), dpi = 300, antialias = "text")
-  writePNG(bitmap, assign("tf", tempfile(fileext = ".png")))
-  plot(assign("im2r", readImage(tf), currentenv))
-  
-  rm(tf)
-
-  # Select folder textbox and button
-  f1 <- gframe("", container = topgr)
-  lbl_dname<- glabel("Selected folder to run Quality Control on: ", container = f1)
-  txt_dname <- gedit(dname, container = f1)
- 
-  h1 <- function(...,  envir = parent.frame()){
+  han1 <- function(...,  envir = parent.frame()){
     getwd()
-    assign("dname", normalizePath(tk_choose.dir(), "\\"), currentenv)
+    selected_folder <- tk_choose.dir()
+    if(!is.na(selected_folder)) assign("dname", normalizePath(selected_folder, "\\"), currentenv)
+    # If no selection, use default
     svalue(txt_dname) <- dname
-    
+
     ## Look for .raw files before Run.
     file_list <- list.files(path = dname)
-    
+
     # Use first raw file in list
     # Else popup an info text
     raw_list <- file_list[grepl(".raw", file_list)]
@@ -137,27 +81,44 @@ ProteoPipe_widget<-function(env = parent.frame()){
       assign("raw_path", file.path(normalizePath(dname, "\\"), raw_list[[1]], fsep="\\"), currentenv)
       cat("Found .raw file:", raw_path, "\n")
     } else {
-      confirmDialog("There is no .raw file here", handler = function(h,...) dispose(h$obj))
+      modal_dialog <- gbasicdialog(title = "", do.buttons = FALSE)
+      dgr <- ggroup(container =  modal_dialog, horizontal=FALSE)
+      glabel("There is no .raw file here", container = dgr)
+      Sys.sleep(1)
+      dispose(modal_dialog)
     }
-    
-    #Change visibilities
-    visible(b1) <- TRUE # Folder button; keep visible in case user selects wrong folder
-    visible(b2) <- TRUE  # Run button
-    visible(b3) <- FALSE # html button
-    visible(b4) <- FALSE # pdf button
+
+    #Change visibilities; Quit is always visible and enabled.
+    enabled(but1) <- TRUE # Folder button; keep enabled in case user selects wrong folder
+    if (length(raw_list) > 0) enabled(but2) <- TRUE  # Run button
+    enabled(but3) <- FALSE # html button
+    enabled(but4) <- FALSE # pdf button
   }
-  b1 <- gbutton("Select folder", container = f1, expand = FALSE, handler = h1)
+  but1 <- gbutton("Select folder", container = fr1, expand = FALSE, handler = han1)
+  enabled(but1) <- FALSE
+  Sys.sleep(1) # Development documentation suggest some waiting to let the graphics catch up
   
-  # Run button
-  h2 <- function(..., envir = parent.frame()){
-    enabled(b1) <- FALSE # Folder button
-    enabled(b2) <- FALSE # Run button
+  ## Run button
+  han2 <- function(..., envir = parent.frame()){
+    
+    #Change visibilities; Quit is always visible and enabled.
+    enabled(but1) <- FALSE # Folder button
+    enabled(but2) <- FALSE # Run button
+    enabled(but3) <- FALSE # html button
+    enabled(but4) <- FALSE # pdf button
+    
+    # Fill previous run with empty plots
+    dev.set(img1left)
+    plot(0,type='n', axes = FALSE, ann = FALSE)
+    dev.set(img1right)
+    plot(0,type='n', axes = FALSE, ann = FALSE)
+
     cat("Running Quality Control on", dname, "\n")
     if (length(raw_list) == 0) {
       confirmDialog("There is no .raw file here", handler = function(h,...) dispose(h$obj))
       return()
     }
-    
+
     ## Plotting .raw MS1 retention times and peak m/z values
 
     gcinfo(TRUE) # Image files are large, we want to see the garbage collection interruptions
@@ -218,14 +179,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
     rm(tf)
     gcinfo(FALSE) # Quit showing the garbage business until next image
 
-    # Remove the previous run results image
-    dev.set(img1right)
-    plot(0,type='n',axes=FALSE,ann=FALSE)
-
-    visible(bottomgr) <- TRUE # New images
-
     ## Running MaxQuant 1.6.3.4
-
     # MaxQuant command line interface has no method to call .raw files, and no verbose mode.
     # Raw file paths are specified in mqpar.xml; replace the *.raw path with the new.
     # Use a file connection and textfile operations for ease and speed.
@@ -288,10 +242,10 @@ ProteoPipe_widget<-function(env = parent.frame()){
     ## Creating folder labeled date
     cat("Creating result folder.\n")
     assign("folder_path", file.path(dname, Sys.Date()), currentenv)
-    
+
     # If existing, reuse; else create
     if (!dir.exists(folder_path)) dir.create(folder_path)
-    
+
     # Copy raw & report files; suppress warnings for missing PTXQC files since it depends on test
     file.copy(raw_path, folder_path)
     suppressWarnings(file.copy(unlist(r), folder_path, overwrite = TRUE))
@@ -309,52 +263,123 @@ ProteoPipe_widget<-function(env = parent.frame()){
 
     cat("Removed work files.\n")
     cat("All Work done!\n\n")
-    
-    # Change visibilities
-    enabled(b1) <- TRUE # Folder button
-    visible(b2) <- FALSE # Run button
-    enabled(b2) <- TRUE # Run button
-    visible(b3) <- TRUE # html button
-    visible(b4) <- TRUE # pdf button
-    visible(b5) <- TRUE # Quit button; always visible
-  }
-  
-  b2 <- gbutton("Run QC", container = rightbgr, handler = h2)
-  
-  # html report button
-  b3 <- gbutton("html", container = rightbgr, handler=function(...) browseURL(file.path(folder_path, basename(r$report_file_HTML))))
 
-  # pdf report button
-  b4 <- gbutton("pdf", container = rightbgr, handler=function(...) browseURL(file.path(folder_path, basename(r$report_file_PDF))))
+    # Change visibilities
+    enabled(but1) <- TRUE # Folder button
+    enabled(but2) <- FALSE # Run button
+    enabled(but3) <- TRUE # html button
+    enabled(but4) <- TRUE # pdf button
+  }
+  but2 <- gbutton("Run QC", container = gr2, handler = han2)
+  enabled(but2) <- FALSE
+  Sys.sleep(1) # Development documentation suggest some waiting to let the graphics catch up
+  
+  ## Labels and paned groups for rescalable GUI
+  labelh1 <- glabel("   ", container = gr31)
+  hor1 <- gpanedgroup(container = gr31, expand = TRUE)
+  labelh2 <- glabel("Raw", container = hor1)
+  labelh3 <- glabel("HeatMap", container = hor1)
+  
+  labelv1 <- glabel("Run", container = gr32)
+  img1 <- gpanedgroup(container = gr32, expand = TRUE)
+
+  labelv2 <- glabel("Ref", container = gr33)
+  img2 <- gpanedgroup(container = gr33, expand = TRUE)
+  
+  labelv3 <- glabel("Report", container = gr34)
+  hor2 <- gpanedgroup(container = gr34, expand = TRUE)
+  
+  visible(win) <- TRUE # Must make this visible to get the GTK graphics mounted correctly.
+  visible(gr) <- TRUE
+  
+  # 4 plots w/ handlers for rescaling when clicked; device handling is primitive since GTK breaks easily.
+  # --_ check for images before allowing rescale ---
+  img1left <- ggraphics(container = img1);
+  addHandlerChanged(img1left, handler = function(h, ..., envir=parent.frame()){
+    imscaled <- resize(img1l, w=gWidgets2::size(img1)[1], h=gWidgets2::size(img1)[2])
+    dev.set(img1left);plot(imscaled)
+  })
+  img1left <- dev.cur()
+  
+  img1right <- ggraphics(container = img1);
+  addHandlerChanged(img1right, handler = function(h, ..., envir=parent.frame()){
+    imscaled <- resize(img1r, w=gWidgets2::size(img1)[1], h=gWidgets2::size(img1)[2])
+    dev.set(img1right);plot(imscaled)
+  })
+  img1right <- dev.cur()
+  
+  img2left <- ggraphics(container = img2);
+  addHandlerChanged(img2left, handler = function(h, ..., envir=parent.frame()){
+    imscaled <- resize(img2l, w=gWidgets2::size(img2)[1], h=gWidgets2::size(img2)[2])
+    dev.set(img2left);plot(imscaled)
+  })
+  img2left <- dev.cur()
+  
+  img2right <- ggraphics(container = img2);
+  addHandlerChanged(img2right, handler = function(h, ..., envir=parent.frame()){
+    imscaled <- resize(img2r, w=gWidgets2::size(img2)[1], h=gWidgets2::size(img2)[2])
+    dev.set(img2right);plot(imscaled)
+  })
+  img2right <- dev.cur()
+  Sys.sleep(1) # Development documentation suggest some waiting to let the graphics catch up
+
+  # Fill with empty plots
+  dev.set(img1left)
+  plot(0,type='n', axes = FALSE, ann = FALSE)
+  dev.set(img1right)
+  plot(0,type='n', axes = FALSE, ann = FALSE)
+  dev.set(img2left)
+  plot(0,type='n', axes = FALSE, ann = FALSE)
+  dev.set(img2right)
+  plot(0,type='n', axes = FALSE, ann = FALSE)
+  Sys.sleep(1) # Development documentation suggest some waiting to let the graphics catch up
+
+  # Generate reference images from file
+  dev.set(img2left)
+  plot(assign("img2l", readImage(file.path(dname, ref_raw)), currentenv))
+
+  dev.set(img2right)
+  plot(assign("img2r", readImage(file.path(dname, ref_results)), currentenv))
+
+  Sys.sleep(1) # Development documentation suggest some waiting to let the graphics catch up
+  
+  ## Report and Quit buttons
+  gr_res <- ggroup(container = hor2) 
+  but3 <- gbutton("html", container = gr_res, handler=function(...) browseURL(file.path(folder_path, basename(r$report_file_HTML))))
+  but4 <- gbutton("pdf", container = gr_res, handler=function(...) browseURL(file.path(folder_path, basename(r$report_file_PDF))))
   
   # Quit button
-  h5 <- function(..., envir = parent.frame()){
+  gr_quit <- ggroup(container = hor2)
+  han5 <- function(..., envir = parent.frame()){
     graphics.off()
     dispose(win, ...)
     console <- FALSE # Flag console closed
+    sink() # Close log file
+    close(con)
     quit()
   }
-  b5 <- gbutton("Quit", container = leftbgr, handler = h5)
+  but5 <- gbutton("Quit", container = gr_quit, handler = han5)
   
+  # Graphics mounted; Quit is always visible and enabled.
+  enabled(but1) <- TRUE # Folder button
+  enabled(but2) <- FALSE # Run button
+  enabled(but3) <- FALSE # html button
+  enabled(but4) <- FALSE # pdf button
+
   ## Look for .raw files before Run.
   file_list <- list.files(path = dname)
-  
+
   # Use first raw file in list
   raw_list <- file_list[grepl(".raw", file_list)]
   if (length(raw_list) > 0) {
     assign("raw_path", file.path(normalizePath(dname, "\\"), raw_list[[1]], fsep="\\"), currentenv)
     cat("Found .raw file:", raw_path, "\n")
     
-    #Change visibilities
-    visible(b1) <- TRUE # Folder button
-    visible(b2) <- TRUE  # Run button
-    visible(b3) <- FALSE # html button
-    visible(b4) <- FALSE # pdf button
+    #Change visibilities; Quit is always visible and enabled.
+    enabled(but1) <- TRUE # Folder button; keep enabled in case user selects wrong folder
+    enabled(but2) <- TRUE  # Run button
+    enabled(but3) <- FALSE # html button
+    enabled(but4) <- FALSE # pdf button
   }
-  
-  visible(middlegr) <- TRUE # Button groups
-  visible(rightbgr) <- TRUE # Run button group
-  visible(bottomgr) <- TRUE # Images group
-  visible(gr) <- TRUE
 
 } # end Calling

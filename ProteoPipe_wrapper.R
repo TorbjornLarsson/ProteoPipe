@@ -20,9 +20,12 @@ tryCatch({source("C:/Users/torla438/Work Folders/Documents/QC/ProteoPipe/ProteoP
   console <- TRUE # Do-while (repeat) console open flag
   text_log <- file.path(Sys.getenv("USERPROFILE"), "Work Folders", "Desktop", "ProteoPipe", "log.txt", fsep="\\")
   warnings_log <- file.path(Sys.getenv("USERPROFILE"), "Work Folders", "Desktop", "ProteoPipe", "warnings.txt", fsep="\\")
+  con <- file(text_log, open = "a", blocking = FALSE)
+  sink(con, split = TRUE)
   
   # Call handler for each warning as they come, to reenter try/catch loop.
-  withCallingHandlers(capture.output(ProteoPipe_widget(), file = text_log, split = TRUE),
+  withCallingHandlers(#capture.output(ProteoPipe_widget(), file = text_log, split = TRUE),
+                      ProteoPipe_widget(),
                       # Warning object seems to have abbreviation 'w'
                       # W is a single warning list object when run with try/catch calling handler
                       warning=function(w) {
@@ -38,5 +41,4 @@ tryCatch({source("C:/Users/torla438/Work Folders/Documents/QC/ProteoPipe/ProteoP
     if (!console) {}
   }
 })
-
 
