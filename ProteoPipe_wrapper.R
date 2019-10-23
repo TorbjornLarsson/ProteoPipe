@@ -1,31 +1,52 @@
-#Summary:
-#A widget wrapper to generate a PTXQC Quality Control of MS^2 instrument
-#based on MaxQuant analysis.
-#Intended to be run with local R-3.5.0 installation on User,
-#and will place warnings log file on User Desktop.
-#If installed to be run from a Windows shortcut,
-#the shortcut properties should be
-#Target: %COMSPEC% /C Rscript --vanilla "%USERPROFILE%\Work Folders\Desktop\ProteoPipe\ProteoPipe_wrapper.R"
-#Start in: "C:\Program Files\R\R-3.5.0\bin"
-#Input arguments:
-#None
-#Output:
-#Errors goes to console.
-#Warnings goes to log file.
-#Garbage collection is the generic, optimized R scheduling.
+# Summary:
+# A widget wrapper to generate a PTXQC Quality Control of MS^2 instrument
+# based on MaxQuant analysis.
+# Intended to be run with local R-3.5.0 installation on User,
+# and will place warnings log file on User Desktop.
+# If installed to be run from a Windows shortcut,
+# the shortcut properties should be
+# Target: %COMSPEC% /C Rscript --vanilla "%USERPROFILE%\Work Folders\Desktop\ProteoPipe\ProteoPipe_wrapper.R"
+# Start in: "C:\Program Files\R\R-3.5.0\bin"
+# Input arguments:
+# None
+# Output:
+# Console text goes to log file; runs are time stamped. A temporary log file is used for MaxQuant control, 
+# then merged with the main log file.
+# Errors goes to console.
+# Warnings goes to separate log file; program start is time stamped.
+# Garbage collection is the generic, optimized R scheduling.
 
-tryCatch({source("C:/Users/torla438/Work Folders/Documents/QC/ProteoPipe/ProteoPipe_widget.R")
-  
+## Defaults
+# Installation directory
+dname <- file.path(Sys.getenv("USERPROFILE"), "Work Folders", "Desktop", "ProteoPipe", fsep="\\")
+
+tryCatch({source(file.path(dname, "ProteoPipe_widget.R"))
   # Defaults
   console <- TRUE # Do-while (repeat) console open flag
-  text_log <- file.path(Sys.getenv("USERPROFILE"), "Work Folders", "Desktop", "ProteoPipe", "log.txt", fsep="\\")
-  warnings_log <- file.path(Sys.getenv("USERPROFILE"), "Work Folders", "Desktop", "ProteoPipe", "warnings.txt", fsep="\\")
-  con <- file(text_log, open = "a", blocking = FALSE)
+  text_log <- file.path(dname, "log.txt", fsep="\\")
+  warnings_log <- file.path(dname, "warnings.txt", fsep="\\")
+  temp_file <- file.path(dname, "MQtemp.txt")
+  
+  # Text log
+  assign("con", file(text_log, open = "a", blocking = FALSE), environment())
   sink(con, split = TRUE)
   
+  # Warnings log
+  assign("con_temp", file(text_log, open = "a", blocking = FALSE), environment())
+  sink(con_temp, split = TRUE)
+  
+  cat("-------------------------------------\n")
+  cat("ProteoPipe v1 [June, 2019]\n")
+  cat("Uppsala University\n")
+  cat("Niklas Handin, et al.\n")
+  cat("-------------------------------------\n")
+  print(Sys.time())
+  
+  sink() # Stop sink to warnings log
+  #close(con_temp)
+  
   # Call handler for each warning as they come, to reenter try/catch loop.
-  withCallingHandlers(#capture.output(ProteoPipe_widget(), file = text_log, split = TRUE),
-                      ProteoPipe_widget(),
+  withCallingHandlers(ProteoPipe_widget(),
                       # Warning object seems to have abbreviation 'w'
                       # W is a single warning list object when run with try/catch calling handler
                       warning=function(w) {

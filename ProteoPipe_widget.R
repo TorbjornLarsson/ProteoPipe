@@ -6,6 +6,10 @@
 
 ProteoPipe_widget<-function(env = parent.frame()){
   
+  ## Load libraries
+  # Notify operator that program is running
+  system("msg * /time:10 /w Proteopipe has started, please wait while loading libraries", wait=FALSE)
+  
   library(stringi)
   library(BiocGenerics)
   
@@ -28,26 +32,23 @@ ProteoPipe_widget<-function(env = parent.frame()){
   library(mzR)
   library(MSnbase)
   
-  cat("-------------------------------------\n")
-  cat("ProteoPipe v1 [June, 2019]\n")
-  cat("Uppsala University\n")
-  cat("Niklas Handin, et al.\n")
-  cat("-------------------------------------\n")
-  
   # Defaults
   gcinfo(FALSE)
   currentenv <- environment()
-  dname <- "C:\\Users\\torla438\\Work Folders\\Desktop\\ProteoPipe"
+  raw_list <- list()
   ref_raw <- "raw.png"
   ref_results <- "results.png"
+  no_raw <- "found_no_raw_files.png"
+  many_raw <- "found_many_raw_files.png"
   cat("Console texts are logged in ", text_log, "\n")
   cat("Warnings are logged in ", warnings_log, "\n")
+  MQ_maxtime <- 7200 # Time in seconds; QC run takes about 1 hour, so 2 hours seems reasonable.
 
   #------------------Calling
-  
+
   ## GUI Widget
   graphics.off()
-  par(mar=c(1,1,1,1))
+  par(mar=c(1,1,1,1)) # In case of RStudio graphics bug during development
   win <- gwindow("ProteoPipe", width=960, height=960, visible = FALSE)
   gr <- ggroup(container = win, horizontal = FALSE, visible = FALSE)
   
@@ -71,26 +72,9 @@ ProteoPipe_widget<-function(env = parent.frame()){
     # If no selection, use default
     svalue(txt_dname) <- dname
 
-    ## Look for .raw files before Run.
-    file_list <- list.files(path = dname)
-
-    # Use first raw file in list
-    # Else popup an info text
-    raw_list <- file_list[grepl(".raw", file_list)]
-    if (length(raw_list) > 0) {
-      assign("raw_path", file.path(normalizePath(dname, "\\"), raw_list[[1]], fsep="\\"), currentenv)
-      cat("Found .raw file:", raw_path, "\n")
-    } else {
-      modal_dialog <- gbasicdialog(title = "", do.buttons = FALSE)
-      dgr <- ggroup(container =  modal_dialog, horizontal=FALSE)
-      glabel("There is no .raw file here", container = dgr)
-      Sys.sleep(1)
-      dispose(modal_dialog)
-    }
-
-    #Change visibilities; Quit is always visible and enabled.
+    # Change visibilities; Quit is always visible and enabled.
     enabled(but1) <- TRUE # Folder button; keep enabled in case user selects wrong folder
-    if (length(raw_list) > 0) enabled(but2) <- TRUE  # Run button
+    enabled(but2) <- FALSE  # Run button
     enabled(but3) <- FALSE # html button
     enabled(but4) <- FALSE # pdf button
   }
@@ -101,11 +85,20 @@ ProteoPipe_widget<-function(env = parent.frame()){
   ## Run button
   han2 <- function(..., envir = parent.frame()){
     
-    #Change visibilities; Quit is always visible and enabled.
+    # Change visibilities; Quit is always visible and enabled.
     enabled(but1) <- FALSE # Folder button
     enabled(but2) <- FALSE # Run button
     enabled(but3) <- FALSE # html button
     enabled(but4) <- FALSE # pdf button
+    
+    # Run start time; used for folder names
+    con_temp <- file(warnings_log, open = "a", blocking = FALSE)
+    sink(con_temp, split = TRUE)
+    run_time <- Sys.time()
+    print(run_time)
+    sink()
+    close(con_temp)
+    
     
     # Fill previous run with empty plots
     dev.set(img1left)
@@ -118,30 +111,50 @@ ProteoPipe_widget<-function(env = parent.frame()){
       confirmDialog("There is no .raw file here", handler = function(h,...) dispose(h$obj))
       return()
     }
-
+    
+    ## Running MaxQuant 1.6.3.4
+    # MaxQuant command line interface has no method to call .raw files, and no verbose mode.
+    # Raw file paths are specified in mqpar.xml; replace the *.raw path with the new.
+    # Use a file connection and textfile operations for ease and speed.
+    # The program is run asynchronously and can't time out. The timeout is in the R thread.
+    # For control and correct text logging a temporary log file is created, merged with main log, and erased.
+    
+    replace_txt <- stri_join("      <string>", raw_path, "</string>")
+    
+    mqpar_path <- file.path(dname, "mqpar.xml", fsep="\\")
+    con_temp <- file(mqpar_path)
+    
+    txt <- readLines(con_temp)
+    txt[[grep(".raw", txt, fixed = TRUE)]] <- replace_txt
+    
+    writeLines(txt, con_temp)
+    close(con_temp)
+    
+    # Then we build the R pipe command and call MaxQuant from the command line.
+    mq_path <- file.path(dname, "MaxQuant_1.6.3.4\\MaxQuant\\bin\\MaxQuantCmd.exe")
+    system2(mq_path, shQuote(mqpar_path), stdout = temp_file, wait = FALSE)
+    enabled(lbl_MaxQuant) <- TRUE
+    cat("MaxQuant has started.\n")
+    
     ## Plotting .raw MS1 retention times and peak m/z values
-
-    gcinfo(TRUE) # Image files are large, we want to see the garbage collection interruptions
 
     # Use msconvert for converting to mzXML
     # Filter out MS1 spectra
     cat("Converting MS1/MS2 .raw file to MS1 .mzXML file for plotting purposes\n")
-
-    cmd <- "C:\\Users\\torla438\\Work Folders\\Desktop\\ProteoPipe\\ProteoWizard 3.0.19246.075ea16f5 64-bit\\msconvert.exe"
+    cmd <- file.path(dname, "ProteoWizard 3.0.19246.075ea16f5 64-bit\\msconvert.exe")
     arg <- stri_join(shQuote(raw_path), "--verbose", "--filter", shQuote("msLevel 1"), "--mzXML -o", shQuote(normalizePath(dname)), sep=' ')
-
     system2(cmd, arg)
-
+    
     # Update file list
     # Use first mzXML file in list
-    # --- Implement stop w/ error else ---
     file_list <- list.files(path = dname)
-    mzxml_list <- file_list[grepl(".mzXML", file_list)]
+    mzxml_list <- file_list[grepl(".mzXML", file_list, fixed = TRUE)]
     if (length(mzxml_list) > 0) {
       mzxml_path <- file.path(normalizePath(dname, "\\"), mzxml_list[[1]], fsep="\\")
-      cat("Generating raw MS1 peak image data from .mzXML file:", mzxml_path, "\n")
+      cat("Generating raw MS1 peak image data from .mzXML file: ", mzxml_path, "\n")
     } else {
       e <- simpleError("Found no .mzXML file.")
+      system("msg * /w Pipeline error: Found no .mzXML file.") # Tell the GUI user; Quit works.
       stop(e)
     }
 
@@ -150,7 +163,9 @@ ProteoPipe_widget<-function(env = parent.frame()){
     cat("Extracting retention times and m/z data.\n")
     basename(mzxml_path)
     ms_msl1 <- readMSData(mzxml_path, mode="onDisk")
-    print(ms_msl1)
+    
+    cat("MS data object: \n")
+    cat(capture.output(print(ms_msl1)), "\n")
 
     ms_rt <- rtime(ms_msl1)
     ms_mz <- mz(ms_msl1)
@@ -168,44 +183,45 @@ ProteoPipe_widget<-function(env = parent.frame()){
 
     cat("Building spectra image.\n")
     len <- length(ms_rt)
+    sink() # Don't divert this to log file. 
     lapply(seq(8, len, 8), function(i, envir = parent.frame()) {
       cat("\r", i, "/", len)
       assign("plt", points.default(unlist(ms_mz[[i]]), rep(ms_rt[[i]]/60, length(ms_mz[[i]])), type="p", col="green", pch='.'))
     })
     cat("\n")
+    sink(con, append=TRUE, split=TRUE) #Continue divert stdin to log file.
     dev.off()
     dev.set(img1left);
-    plot(assign("im1l", readImage(tf), currentenv))
+    plot(assign("img1", readImage(tf), currentenv))
     rm(tf)
-    gcinfo(FALSE) # Quit showing the garbage business until next image
+    cat("Image done, based on ", len, "spectra.\n")
+    cat("Waiting for MaxQuant to finish.\n")
+    Sys.sleep(1) # Development documentation suggest some waiting to let the graphics catch up
 
-    ## Running MaxQuant 1.6.3.4
-    # MaxQuant command line interface has no method to call .raw files, and no verbose mode.
-    # Raw file paths are specified in mqpar.xml; replace the *.raw path with the new.
-    # Use a file connection and textfile operations for ease and speed.
-
-    replace_txt <- stri_join("      <string>", raw_path, "</string>")
-
-    mqpar_path <- "C:\\Users\\torla438\\Work Folders\\Desktop\\ProteoPipe\\mqpar.xml"
-    con <- file(mqpar_path)
-
-    txt <- readLines(con)
-    txt[[grep(".raw", txt)]] <- replace_txt
-
-    writeLines(txt, con)
-    close(con)
-
-    # Then we build the R pipe command and call MaxQuant from the command line.
-    mq_path <- "C:\\Users\\torla438\\Work Folders\\Desktop\\ProteoPipe\\MaxQuant_1.6.3.4\\MaxQuant\\bin\\MaxQuantCmd.exe"
-    system2(mq_path, shQuote(mqpar_path))
-
-    ## Running PTXQC
-
-    # Default is provided yaml object, but use a provided one if in folder,
-    # else let PTXQC generate one.
-    yaml_path <- file.path(Sys.getenv("USERPROFILE"), "Work Folders", "Desktop", "ProteoPipe", "Template_QC_Hela_digests_1h_400_Niklas.yaml", fsep="\\")
-
-    yaml_list <- file_list[grepl(".yaml", file_list)]
+    ## Waiting for MaxQuant to finish
+    # After finish, append the text to the main log file.
+    assign("temp_log", "", envir=currentenv)
+    assign("wait_time", 0, envir=currentenv)
+    while ((all(nzchar(temp_log)) == 0) & (wait_time <= MQ_maxtime)){ 
+      tryCatch({assign("temp_log", readLines(temp_file), envir=currentenv)},
+      error = function(e) {
+        assign("wait_time", as.numeric(Sys.time() - run_time, unit="secs"), envir=currentenv)
+        Sys.sleep(60)
+        })
+    }
+    if (wait_time > MQ_maxtime) {
+      e <- simpleError("MaxQuant timed out.")
+      system("msg * /w Pipeline error: MaxQuant timed out. Computer may need restart to clear files at next run.") # Tell the GUI user; Quit works, but MQ may have locked the files.
+      stop(e)
+    }
+    file.remove(temp_file)
+    write(temp_log, file = text_log, append = TRUE)
+    
+    ## Making a Quality Control report with PTXQC    
+    # QC run parameters is in a provided yaml file, else use the first in the folder,
+    # else let PTXQC generate a default yaml object.
+    yaml_path <- file.path(dname, "Template_QC_Hela_digests_1h_400_Niklas.yaml", fsep="\\")
+    yaml_list <- file_list[grepl(".yaml", file_list, fixed = TRUE)]
     # Use first in list
     if (length(yaml_list) > 0) {
       yaml_path <- file.path(normalizePath(dname, "\\"), yaml_list[[1]], fsep="\\")
@@ -216,7 +232,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
       cat("Loaded .yaml file: ", yaml_path, "\n")
     }
     else {yaml_list_object <- list()}
-
+    
     # Report will generate lots of warnings that we want to catch to warnings log file.
     # Call handler for each warning as they come, to reenter try/catch loop.
     txt_folder <- file.path(dname, "combined", "txt", fsep="\\")
@@ -236,12 +252,12 @@ ProteoPipe_widget<-function(env = parent.frame()){
     dev.set(img1right)
     bitmap <- pdf_render_page(r$report_file_PDF, page = 1, dpi = 300, antialias = "text")
     writePNG(bitmap, assign("tf", tempfile(fileext = ".png")))
-    plot(assign("im1r", readImage(tf), currentenv))
+    plot(assign("img1r", readImage(tf), currentenv))
     rm(tf)
 
     ## Creating folder labeled date
     cat("Creating result folder.\n")
-    assign("folder_path", file.path(dname, Sys.Date()), currentenv)
+    assign("folder_path", file.path(dname, format(run_time, "%Y-%m-%d %H-%M-%S")), currentenv)
 
     # If existing, reuse; else create
     if (!dir.exists(folder_path)) dir.create(folder_path)
@@ -262,64 +278,81 @@ ProteoPipe_widget<-function(env = parent.frame()){
     file.remove(file.path(dname, stri_join(raw_name[[1]], ".index")))
 
     cat("Removed work files.\n")
-    cat("All Work done!\n\n")
-
-    # Change visibilities
+    cat("All Work done!\n")
+    
+    #con_temp <- file(warnings_log, open = "a", blocking = FALSE)
+    sink(con_temp, split = TRUE)
+    print(Sys.time())
+    cat("-------------------------------------\n")
+    sink() # Stop temporary sink to warnings log
+    close(con_temp)
+    
+    # Change visibilities; Quit is always visible and enabled.
+    enabled(lbl_MaxQuant) <- FALSE
     enabled(but1) <- TRUE # Folder button
     enabled(but2) <- FALSE # Run button
     enabled(but3) <- TRUE # html button
     enabled(but4) <- TRUE # pdf button
+    return()
   }
   but2 <- gbutton("Run QC", container = gr2, handler = han2)
   enabled(but2) <- FALSE
+  lbl_MaxQuant <- glabel("MaxQuant will now run for 1-2 hours.", container = gr2)
+  enabled(lbl_MaxQuant) <- FALSE
+  lbl_no_raw_files <- glabel("Found no .raw files!", container = gr2)
+  visible(lbl_no_raw_files) <- FALSE
+  lbl_many_raw_files <- glabel("Found many .raw files!", container = gr2)
+  visible(lbl_many_raw_files) <- FALSE
   Sys.sleep(1) # Development documentation suggest some waiting to let the graphics catch up
   
   ## Labels and paned groups for rescalable GUI
   labelh1 <- glabel("   ", container = gr31)
+  font(labelh1) <- list(family="monospace")
   hor1 <- gpanedgroup(container = gr31, expand = TRUE)
   labelh2 <- glabel("Raw", container = hor1)
+  font(labelh2) <- list(family="monospace")
   labelh3 <- glabel("HeatMap", container = hor1)
+  font(labelh3) <- list(family="monospace")
   
   labelv1 <- glabel("Run", container = gr32)
+  font(labelv1) <- list(family="monospace")
   img1 <- gpanedgroup(container = gr32, expand = TRUE)
 
   labelv2 <- glabel("Ref", container = gr33)
+  font(labelv2) <- list(family="monospace")
   img2 <- gpanedgroup(container = gr33, expand = TRUE)
   
   labelv3 <- glabel("Report", container = gr34)
+  font(labelv3) <- list(family="monospace")
   hor2 <- gpanedgroup(container = gr34, expand = TRUE)
   
   visible(win) <- TRUE # Must make this visible to get the GTK graphics mounted correctly.
   visible(gr) <- TRUE
   
   # 4 plots w/ handlers for rescaling when clicked; device handling is primitive since GTK breaks easily.
-  # --_ check for images before allowing rescale ---
+  # Since we draw empty plots, check for images before allowing rescale.
   img1left <- ggraphics(container = img1);
   addHandlerChanged(img1left, handler = function(h, ..., envir=parent.frame()){
-    imscaled <- resize(img1l, w=gWidgets2::size(img1)[1], h=gWidgets2::size(img1)[2])
-    dev.set(img1left);plot(imscaled)
+    if (exists("img1l")) {
+      imscaled <- resize(img1l, w=gWidgets2::size(img1)[1], h=gWidgets2::size(img1)[2])
+      dev.set(img1left);plot(imscaled)
+    }
   })
   img1left <- dev.cur()
   
   img1right <- ggraphics(container = img1);
   addHandlerChanged(img1right, handler = function(h, ..., envir=parent.frame()){
-    imscaled <- resize(img1r, w=gWidgets2::size(img1)[1], h=gWidgets2::size(img1)[2])
-    dev.set(img1right);plot(imscaled)
+    if (exists("img1r")) {
+      imscaled <- resize(img1r, w=gWidgets2::size(img1)[1], h=gWidgets2::size(img1)[2])
+      dev.set(img1right);plot(imscaled)
+    }
   })
   img1right <- dev.cur()
   
   img2left <- ggraphics(container = img2);
-  addHandlerChanged(img2left, handler = function(h, ..., envir=parent.frame()){
-    imscaled <- resize(img2l, w=gWidgets2::size(img2)[1], h=gWidgets2::size(img2)[2])
-    dev.set(img2left);plot(imscaled)
-  })
   img2left <- dev.cur()
   
   img2right <- ggraphics(container = img2);
-  addHandlerChanged(img2right, handler = function(h, ..., envir=parent.frame()){
-    imscaled <- resize(img2r, w=gWidgets2::size(img2)[1], h=gWidgets2::size(img2)[2])
-    dev.set(img2right);plot(imscaled)
-  })
   img2right <- dev.cur()
   Sys.sleep(1) # Development documentation suggest some waiting to let the graphics catch up
 
@@ -353,9 +386,12 @@ ProteoPipe_widget<-function(env = parent.frame()){
   han5 <- function(..., envir = parent.frame()){
     graphics.off()
     dispose(win, ...)
+    con_temp <- file(warnings_log, open = "a", blocking = FALSE)
+    sink(con_temp, split = TRUE)
+    print(Sys.time())
+    cat("-------------------------------------\n")
+    closeAllConnections() # Close sinks and connections
     console <- FALSE # Flag console closed
-    sink() # Close log file
-    close(con)
     quit()
   }
   but5 <- gbutton("Quit", container = gr_quit, handler = han5)
@@ -366,20 +402,57 @@ ProteoPipe_widget<-function(env = parent.frame()){
   enabled(but3) <- FALSE # html button
   enabled(but4) <- FALSE # pdf button
 
-  ## Look for .raw files before Run.
-  file_list <- list.files(path = dname)
-
-  # Use first raw file in list
-  raw_list <- file_list[grepl(".raw", file_list)]
-  if (length(raw_list) > 0) {
-    assign("raw_path", file.path(normalizePath(dname, "\\"), raw_list[[1]], fsep="\\"), currentenv)
-    cat("Found .raw file:", raw_path, "\n")
+  ## Loop and look for .raw files before Run.
+  # Use a flag so Run button is always enabled when there is a .raw file,
+  # the other two states are kept fully dynamic.
+  
+  assign("first_wait", TRUE, currentenv)
+  
+  while (TRUE) {
+    file_list <- list.files(path = dname)
     
-    #Change visibilities; Quit is always visible and enabled.
-    enabled(but1) <- TRUE # Folder button; keep enabled in case user selects wrong folder
-    enabled(but2) <- TRUE  # Run button
-    enabled(but3) <- FALSE # html button
-    enabled(but4) <- FALSE # pdf button
-  }
+    # Use first raw file in list
+    raw_list <- file_list[grepl(".raw", file_list, fixed = TRUE)]
 
-} # end Calling
+    if ((length(raw_list) == 1) & (first_wait)) {
+      assign("raw_path", file.path(normalizePath(dname, "\\"), raw_list[[1]], fsep="\\"), currentenv)
+      assign("first_wait", FALSE, currentenv)
+      cat("Found .raw file:", raw_path, "\n")
+
+      # Change visibilities; Quit is always visible and enabled.
+      visible(lbl_no_raw_files) <- FALSE
+      visible(lbl_many_raw_files) <- FALSE
+      enabled(but1) <- TRUE # Folder button; keep enabled in case user selects wrong folder
+      enabled(but2) <- TRUE  # Run button
+      enabled(but3) <- FALSE # html button
+      enabled(but4) <- FALSE # pdf button
+    }
+    
+    if (length(raw_list) == 0) {
+      assign("first_wait", TRUE, currentenv)
+      
+      # Change visibilities; Quit is always visible and enabled.
+      visible(lbl_no_raw_files) <- TRUE
+      enabled(but1) <- TRUE # Folder button; keep enabled in case user selects wrong folder
+      enabled(but2) <- FALSE  # Run button
+      enabled(but3) <- FALSE # html button
+      enabled(but4) <- FALSE # pdf button
+    }
+    
+    if (length(raw_list) > 1) {
+      assign("first_wait", TRUE, currentenv)
+
+      # Change visibilities; Quit is always visible and enabled.
+      visible(lbl_many_raw_files) <- TRUE
+      enabled(but1) <- TRUE # Folder button; keep enabled in case user selects wrong folder
+      enabled(but2) <- FALSE  # Run button
+      enabled(but3) <- FALSE # html button
+      enabled(but4) <- FALSE # pdf button
+      #}
+    }
+    
+    Sys.sleep(1) # Wait a bit before continue looping
+
+  } # End while loop
+  
+} # End main call
