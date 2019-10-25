@@ -92,11 +92,11 @@ ProteoPipe_widget<-function(env = parent.frame()){
     enabled(but4) <- FALSE # pdf button
     
     # Run start time; used for folder names
-    con_temp <- file(warnings_log, open = "a", blocking = FALSE)
-    sink(con_temp, split = TRUE)
     run_time <- Sys.time()
-    print(run_time)
-    sink()
+    run_time_text <- paste(Sys.time())
+    cat(run_time_text, "\n")
+    con_temp <- file(warnings_log, open = "a", blocking = FALSE)
+    writeLines(run_time_text, con_temp)
     close(con_temp)
     
     
@@ -194,7 +194,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
     dev.set(img1left);
     plot(assign("img1", readImage(tf), currentenv))
     rm(tf)
-    cat("Image done, based on ", len, "spectra.\n")
+    cat("Image done, based on", len, "spectra.\n")
     cat("Waiting for MaxQuant to finish.\n")
     Sys.sleep(1) # Development documentation suggest some waiting to let the graphics catch up
 
@@ -202,7 +202,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
     # After finish, append the text to the main log file.
     assign("temp_log", "", envir=currentenv)
     assign("wait_time", 0, envir=currentenv)
-    while ((all(nzchar(temp_log)) == 0) & (wait_time <= MQ_maxtime)){ 
+    while ((all(nzchar(temp_log)) == 0) & (wait_time <= MQ_maxtime)) {
       tryCatch({assign("temp_log", readLines(temp_file), envir=currentenv)},
       error = function(e) {
         assign("wait_time", as.numeric(Sys.time() - run_time, unit="secs"), envir=currentenv)
@@ -280,11 +280,10 @@ ProteoPipe_widget<-function(env = parent.frame()){
     cat("Removed work files.\n")
     cat("All Work done!\n")
     
-    #con_temp <- file(warnings_log, open = "a", blocking = FALSE)
-    sink(con_temp, split = TRUE)
-    print(Sys.time())
-    cat("-------------------------------------\n")
-    sink() # Stop temporary sink to warnings log
+    stop_lines <- c(stri_join(paste(Sys.time()), "\n"), "-------------------------------------\n\n")
+    cat(stop_lines)
+    con_temp <- file(warnings_log, open = "a", blocking = FALSE)
+    writeLines(stop_lines, con_temp)
     close(con_temp)
     
     # Change visibilities; Quit is always visible and enabled.
@@ -386,10 +385,10 @@ ProteoPipe_widget<-function(env = parent.frame()){
   han5 <- function(..., envir = parent.frame()){
     graphics.off()
     dispose(win, ...)
+    stop_lines <- c(stri_join(paste(Sys.time()), "\n"), "-------------------------------------\n\n")
+    cat(stop_lines)
     con_temp <- file(warnings_log, open = "a", blocking = FALSE)
-    sink(con_temp, split = TRUE)
-    print(Sys.time())
-    cat("-------------------------------------\n")
+    writeLines(stop_lines, con_temp)
     closeAllConnections() # Close sinks and connections
     console <- FALSE # Flag console closed
     quit()
@@ -435,8 +434,6 @@ ProteoPipe_widget<-function(env = parent.frame()){
       visible(lbl_no_raw_files) <- TRUE
       enabled(but1) <- TRUE # Folder button; keep enabled in case user selects wrong folder
       enabled(but2) <- FALSE  # Run button
-      enabled(but3) <- FALSE # html button
-      enabled(but4) <- FALSE # pdf button
     }
     
     if (length(raw_list) > 1) {
@@ -446,8 +443,6 @@ ProteoPipe_widget<-function(env = parent.frame()){
       visible(lbl_many_raw_files) <- TRUE
       enabled(but1) <- TRUE # Folder button; keep enabled in case user selects wrong folder
       enabled(but2) <- FALSE  # Run button
-      enabled(but3) <- FALSE # html button
-      enabled(but4) <- FALSE # pdf button
       #}
     }
     
