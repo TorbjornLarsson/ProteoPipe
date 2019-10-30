@@ -15,10 +15,13 @@
 # Errors goes to console.
 # Warnings goes to separate log file; program start is time stamped.
 # Garbage collection is the generic, optimized R scheduling.
+# Reference: HeLa_QC_20190823_20190823120456.raw, "Average~Overall~Quality" 0.900145967423899.
 
 ## Defaults
 # Installation directory
-dname <- file.path(Sys.getenv("USERPROFILE"), "Work Folders", "Desktop", "ProteoPipe", fsep="\\")
+#dname <- file.path("F:", "Working Folder", "TL", "ProteoPipe", fsep="\\")
+dname <- normalizePath(dirname(sys.frame(1)$ofile), winslash = "\\")
+
 
 tryCatch({source(file.path(dname, "ProteoPipe_widget.R"))
   # Defaults

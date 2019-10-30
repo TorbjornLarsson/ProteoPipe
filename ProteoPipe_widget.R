@@ -19,6 +19,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
   # To get the toolkit RGTk2, load library gWidgets2RGtk2 into R and accept installing GTK+
   options("guiToolkit"="RGtk2")
   library(tcltk2)
+  #library(graphics)
 
   # Load Quality Control methods
   library(PTXQC)
@@ -44,12 +45,13 @@ ProteoPipe_widget<-function(env = parent.frame()){
   cat("Warnings are logged in ", warnings_log, "\n")
   MQ_maxtime <- 7200 # Time in seconds; QC run takes about 1 hour, so 2 hours seems reasonable.
 
-  #------------------Calling
+  #------------------Calling------------------
 
   ## GUI Widget
   graphics.off()
   par(mar=c(1,1,1,1)) # In case of RStudio graphics bug during development
   win <- gwindow("ProteoPipe", width=960, height=960, visible = FALSE)
+  focus(win)
   gr <- ggroup(container = win, horizontal = FALSE, visible = FALSE)
   
   gr1 <- ggroup(container = gr, horizontal = FALSE) # Used for folder select
@@ -131,8 +133,9 @@ ProteoPipe_widget<-function(env = parent.frame()){
     close(con_temp)
     
     # Then we build the R pipe command and call MaxQuant from the command line.
+    error_file <- file.path(dname, "error.txt", fsep="\\")
     mq_path <- file.path(dname, "MaxQuant_1.6.3.4\\MaxQuant\\bin\\MaxQuantCmd.exe")
-    system2(mq_path, shQuote(mqpar_path), stdout = temp_file, wait = FALSE)
+    system2(mq_path, shQuote(mqpar_path), stdout = temp_file, stderr = error_file, wait = FALSE)
     enabled(lbl_MaxQuant) <- TRUE
     cat("MaxQuant has started.\n")
     
@@ -198,28 +201,48 @@ ProteoPipe_widget<-function(env = parent.frame()){
     cat("Waiting for MaxQuant to finish.\n")
     Sys.sleep(1) # Development documentation suggest some waiting to let the graphics catch up
 
-    ## Waiting for MaxQuant to finish
-    # After finish, append the text to the main log file.
+    ## Waiting for MaxQuant to finish.
+    # After finish, append the stdin text to the main log file.
     assign("temp_log", "", envir=currentenv)
+    assign("error_log", "", envir=currentenv)
     assign("wait_time", 0, envir=currentenv)
-    while ((all(nzchar(temp_log)) == 0) & (wait_time <= MQ_maxtime)) {
+
+    while ((all(nzchar(temp_log)) == 0) & (all(nzchar(error_log)) == 0) & (wait_time <= MQ_maxtime)) {
       tryCatch({assign("temp_log", readLines(temp_file), envir=currentenv)},
-      error = function(e) {
-        assign("wait_time", as.numeric(Sys.time() - run_time, unit="secs"), envir=currentenv)
-        Sys.sleep(60)
-        })
+               error = function(e) {
+                 assign("wait_time", as.numeric(Sys.time() - run_time, unit="secs"), envir=currentenv)
+                 Sys.sleep(60)
+               })
+      tryCatch({assign("error_log", readLines(error_file), envir=currentenv)},
+               error = function(e) {
+                 assign("wait_time", as.numeric(Sys.time() - run_time, unit="secs"), envir=currentenv)
+                 Sys.sleep(60)
+               })
+    }
+    assign("error_log", readLines(error_file), envir=currentenv)
+    if ((any(nzchar(error_log)) != 0)) {
+      e <- simpleError("MaxQuant threw an error.")
+      system("msg * /w Pipeline error: MaxQuant threw an error. Computer may need restart to clear files at next run.") # Tell the GUI user; Quit works, but MQ may have locked the files.
+      stop(e)
     }
     if (wait_time > MQ_maxtime) {
       e <- simpleError("MaxQuant timed out.")
       system("msg * /w Pipeline error: MaxQuant timed out. Computer may need restart to clear files at next run.") # Tell the GUI user; Quit works, but MQ may have locked the files.
       stop(e)
     }
+    
     file.remove(temp_file)
     write(temp_log, file = text_log, append = TRUE)
     
     ## Making a Quality Control report with PTXQC    
     # QC run parameters is in a provided yaml file, else use the first in the folder,
     # else let PTXQC generate a default yaml object.
+    # First copy the .xml file MaxQuant used to /txt folder for PTXQC/archive purposes
+    txt_folder <- file.path(dname, "combined", "txt", fsep="\\")
+    
+    xml_path <- file.path(dname, "mqpar.xml", fsep="\\")
+    file.copy(xml_path, txt_folder, copy.date = TRUE)
+    
     yaml_path <- file.path(dname, "Template_QC_Hela_digests_1h_400_Niklas.yaml", fsep="\\")
     yaml_list <- file_list[grepl(".yaml", file_list, fixed = TRUE)]
     # Use first in list
@@ -235,7 +258,6 @@ ProteoPipe_widget<-function(env = parent.frame()){
     
     # Report will generate lots of warnings that we want to catch to warnings log file.
     # Call handler for each warning as they come, to reenter try/catch loop.
-    txt_folder <- file.path(dname, "combined", "txt", fsep="\\")
     tryCatch(withCallingHandlers(assign("r", createReport(txt_folder, yaml_list_object), envir=currentenv),
                                  # Warning object seems to have abbreviation 'w'
                                  # W is a single warning list object when run with try/catch calling handler
@@ -254,6 +276,26 @@ ProteoPipe_widget<-function(env = parent.frame()){
     writePNG(bitmap, assign("tf", tempfile(fileext = ".png")))
     plot(assign("img1r", readImage(tf), currentenv))
     rm(tf)
+    
+    # Generate result summary from heatmap.txt
+    entries <- read.table(r$heatmap_values_file, header=TRUE, sep="\t")
+    scores <- entries[-c(1)] # First entry is a file reference
+    ptxqc_color <- function(scores) {
+      if (any(scores < 0.25)) return(hsv(0,1,1)) # Too low QC score
+      else {
+        score <- scores$Average.Overall.Quality
+        if (score < 0.5) {
+          sv <- 2*score   # Black value = [0,1] for score = [0.5, 1]
+          return(hsv(0,1,1-sv)) # Red value is fixed
+        }
+        else {
+          sv <- (2-2*score)   # Black value = [1,0] for score = [0.5, 1]
+          return(hsv(0.3,1,1-sv)) # Green value is fixed
+        }
+      }
+    }
+    font(labelimg1) <- list(size=c(72), foreground=ptxqc_color(scores))
+    enabled(labelimg1) <- TRUE # Results label
 
     ## Creating folder labeled date
     cat("Creating result folder.\n")
@@ -312,14 +354,20 @@ ProteoPipe_widget<-function(env = parent.frame()){
   font(labelh2) <- list(family="monospace")
   labelh3 <- glabel("HeatMap", container = hor1)
   font(labelh3) <- list(family="monospace")
+  labelh4 <- glabel("Result   ", container = gr31) # Adjusted towards centre; may want to try text format
+  font(labelh4) <- list(family="monospace")
   
   labelv1 <- glabel("Run", container = gr32)
   font(labelv1) <- list(family="monospace")
   img1 <- gpanedgroup(container = gr32, expand = TRUE)
+  labelimg1 <- glabel(stri_unescape_unicode("\\u25a0"), container = gr32) # Unicode Character 'BLACK SQUARE' (U+25A0)
+  font(labelimg1) <- list(size=c(72), foreground="green")
 
   labelv2 <- glabel("Ref", container = gr33)
   font(labelv2) <- list(family="monospace")
   img2 <- gpanedgroup(container = gr33, expand = TRUE)
+  labelimg2 <- glabel(stri_unescape_unicode("\\u25a0"), container = gr33) # Unicode Character 'BLACK SQUARE' (U+25A0)
+  font(labelimg2) <- list(size=c(72), foreground=hsv(0.3,1, 0.8002919))
   
   labelv3 <- glabel("Report", container = gr34)
   font(labelv3) <- list(family="monospace")
@@ -396,6 +444,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
   but5 <- gbutton("Quit", container = gr_quit, handler = han5)
   
   # Graphics mounted; Quit is always visible and enabled.
+  enabled(labelimg1) <- FALSE # Results label
   enabled(but1) <- TRUE # Folder button
   enabled(but2) <- FALSE # Run button
   enabled(but3) <- FALSE # html button
@@ -421,6 +470,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
       # Change visibilities; Quit is always visible and enabled.
       visible(lbl_no_raw_files) <- FALSE
       visible(lbl_many_raw_files) <- FALSE
+      enabled(labelimg1) <- FALSE # Results label
       enabled(but1) <- TRUE # Folder button; keep enabled in case user selects wrong folder
       enabled(but2) <- TRUE  # Run button
       enabled(but3) <- FALSE # html button
