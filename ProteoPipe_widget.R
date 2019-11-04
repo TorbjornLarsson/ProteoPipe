@@ -8,7 +8,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
   
   ## Load libraries
   # Notify operator that program is running
-  system("msg * /time:10 /w Proteopipe has started, please wait while loading libraries", wait=FALSE)
+  system("msg * /time:10 /w ProteoPipe has started, please wait while loading libraries", wait = FALSE)
   
   library(stringi)
   library(BiocGenerics)
@@ -44,6 +44,10 @@ ProteoPipe_widget<-function(env = parent.frame()){
   cat("Console texts are logged in ", text_log, "\n")
   cat("Warnings are logged in ", warnings_log, "\n")
   MQ_maxtime <- 7200 # Time in seconds; QC run takes about 1 hour, so 2 hours seems reasonable.
+  mqpar_path_default <- file.path(dname, "mqpar_for_HeLa.xml", fsep="\\")
+  mqpar_path <- mqpar_path_default
+  yaml_path_default <- file.path(dname, "Template_QC_Hela_digests_1h_400_Niklas.yaml", fsep="\\")
+  yaml_path <- yaml_path_default
 
   #------------------Calling------------------
 
@@ -54,7 +58,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
   focus(win)
   gr <- ggroup(container = win, horizontal = FALSE, visible = FALSE)
   
-  gr1 <- ggroup(container = gr, horizontal = FALSE) # Used for folder select
+  gr1 <- ggroup(container = gr) # Used for buttons
   gr2 <- ggroup(container = gr) # Used for buttons
   gr3 <- ggroup(container = gr, horizontal = FALSE) # Used for images
   gr31 <- ggroup(container = gr3) # Label group
@@ -62,33 +66,68 @@ ProteoPipe_widget<-function(env = parent.frame()){
   gr33 <- ggroup(container = gr3) # Result group
   gr34 <- ggroup(container = gr3) # Buttons group
 
-  ## Select folder textbox and button
-  fr1 <- gframe("", container = gr1)
-  lbl_dname<- glabel("Selected folder to run Quality Control on: ", container = fr1)
-  txt_dname <- gedit(dname, container = fr1)
-
-  han1 <- function(...,  envir = parent.frame()){
-    getwd()
+  ## Expert mode buttons
+  # Toggle expert mode
+  han11 <- function(...,  envir = parent.frame()){
+    # Change flag for lopp looking for .raw files 
+    assign("first_wait", TRUE, currentenv)
+    
+    # Change visibilities and paths
+    if (svalue(but11)) {
+      visible(but12) <- TRUE # .raw button
+      visible(but13) <- TRUE # .xml button
+      visible(but14) <- TRUE # .yaml button
+    } else {
+      assign("mqpar_path", mqpar_path_default, currentenv)
+      assign("yaml_path", yaml_path_default, currentenv)
+      assign("dname", dname_default, currentenv)
+      visible(but12) <- FALSE # .raw button
+      visible(but13) <- FALSE # .xml button
+      visible(but14) <- FALSE # .yaml button
+    }
+  }
+  but11 <- gcheckbox("Toggle expert mode", container = gr1, use.togglebutton=TRUE, handler = han11)
+  enabled(but11) <- FALSE
+  
+  # Choose .raw file folder
+  han12 <- function(...,  envir = parent.frame()){
     selected_folder <- tk_choose.dir()
     if(!is.na(selected_folder)) assign("dname", normalizePath(selected_folder, "\\"), currentenv)
-    # If no selection, use default
-    svalue(txt_dname) <- dname
-
-    # Change visibilities; Quit is always visible and enabled.
-    enabled(but1) <- TRUE # Folder button; keep enabled in case user selects wrong folder
-    enabled(but2) <- FALSE  # Run button
-    enabled(but3) <- FALSE # html button
-    enabled(but4) <- FALSE # pdf button
+    cat("Work folder:", dname, "\n")
   }
-  but1 <- gbutton("Select folder", container = fr1, expand = FALSE, handler = han1)
-  enabled(but1) <- FALSE
+  but12 <- gbutton(".raw folder", container = gr1, handler = han12)
+  visible(but12) <- FALSE
+
+  # Choose .xml file
+  han13 <- function(...,  envir = parent.frame()){
+    Filters <- matrix(c(".xml",
+                        ".xml"),
+                      1, 2, byrow = TRUE)
+    selected_file <- tk_choose.files(default = "mqpar.xml", multi = FALSE, filter = Filters)
+    if(!is.na(selected_file)) assign("mqpar_path", selected_file, currentenv)
+    cat("mqpar.xml:", mqpar_path, "\n")
+  }
+  but13 <- gbutton(".xml", container = gr1, handler = han13)
+  visible(but13) <- FALSE
+  
+  # Choose .yaml file
+  han14 <- function(...,  envir = parent.frame()){
+    Filters <- matrix(c(".yaml",
+                        ".yaml"),
+                      1, 2, byrow = TRUE)
+    selected_file <- tk_choose.files(default = ".yaml", multi = FALSE, filter = Filters)
+    if(!is.na(selected_file)) assign("yaml_path", selected_file, currentenv)
+    cat(".yaml:", yaml_path, "\n")
+  }
+  but14 <- gbutton(".yaml", container = gr1, handler = han14)
+  visible(but14) <- FALSE
+  
   Sys.sleep(1) # Development documentation suggest some waiting to let the graphics catch up
   
   ## Run button
   han2 <- function(..., envir = parent.frame()){
     
-    # Change visibilities; Quit is always visible and enabled.
-    enabled(but1) <- FALSE # Folder button
+    # Change visibilities; Quit & Expert is always visible and enabled.
     enabled(but2) <- FALSE # Run button
     enabled(but3) <- FALSE # html button
     enabled(but4) <- FALSE # pdf button
@@ -157,7 +196,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
       cat("Generating raw MS1 peak image data from .mzXML file: ", mzxml_path, "\n")
     } else {
       e <- simpleError("Found no .mzXML file.")
-      system("msg * /w Pipeline error: Found no .mzXML file.") # Tell the GUI user; Quit works.
+      system("msg * /time:200000 /w /v Pipeline error: Found no .mzXML file.") # Tell the GUI user (for 2.3 d).
       stop(e)
     }
 
@@ -222,12 +261,12 @@ ProteoPipe_widget<-function(env = parent.frame()){
     assign("error_log", readLines(error_file), envir=currentenv)
     if ((any(nzchar(error_log)) != 0)) {
       e <- simpleError("MaxQuant threw an error.")
-      system("msg * /w Pipeline error: MaxQuant threw an error. Computer may need restart to clear files at next run.") # Tell the GUI user; Quit works, but MQ may have locked the files.
+      system("msg * /time:200000 /w /v Pipeline error: MaxQuant threw an error. Computer may need restart to clear files at next run.") # Tell the GUI user (for 2.3 d); Quit works, but MQ may have locked the files.
       stop(e)
     }
     if (wait_time > MQ_maxtime) {
       e <- simpleError("MaxQuant timed out.")
-      system("msg * /w Pipeline error: MaxQuant timed out. Computer may need restart to clear files at next run.") # Tell the GUI user; Quit works, but MQ may have locked the files.
+      system("msg * /time:200000 /w /v Pipeline error: MaxQuant timed out. Computer may need restart to clear files at next run.") # Tell the GUI user (for 2.3 d); Quit works, but MQ may have locked the files.
       stop(e)
     }
     
@@ -243,18 +282,20 @@ ProteoPipe_widget<-function(env = parent.frame()){
     xml_path <- file.path(dname, "mqpar.xml", fsep="\\")
     file.copy(xml_path, txt_folder, copy.date = TRUE)
     
-    yaml_path <- file.path(dname, "Template_QC_Hela_digests_1h_400_Niklas.yaml", fsep="\\")
-    yaml_list <- file_list[grepl(".yaml", file_list, fixed = TRUE)]
-    # Use first in list
-    if (length(yaml_list) > 0) {
-      yaml_path <- file.path(normalizePath(dname, "\\"), yaml_list[[1]], fsep="\\")
-    }
-
-    if(length(yaml_path) > 0) {
-      yaml_list_object <- yaml.load_file(yaml_path)
-      cat("Loaded .yaml file: ", yaml_path, "\n")
-    }
-    else {yaml_list_object <- list()}
+    #yaml_path <- file.path(dname, "Template_QC_Hela_digests_1h_400_Niklas.yaml", fsep="\\")
+    # yaml_list <- file_list[grepl(".yaml", file_list, fixed = TRUE)]
+    # # Use first in list
+    # if (length(yaml_list) > 0) {
+    #   yaml_path <- file.path(normalizePath(dname, "\\"), yaml_list[[1]], fsep="\\")
+    # }
+    # 
+    # if(length(yaml_path) > 0) {
+    #   yaml_list_object <- yaml.load_file(yaml_path)
+    #   cat("Loaded .yaml file: ", yaml_path, "\n")
+    # }
+    # else {yaml_list_object <- list()}
+    
+    yaml_list_object <- yaml.load_file(yaml_path)
     
     # Report will generate lots of warnings that we want to catch to warnings log file.
     # Call handler for each warning as they come, to reenter try/catch loop.
@@ -306,6 +347,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
 
     # Copy raw & report files; suppress warnings for missing PTXQC files since it depends on test
     file.copy(raw_path, folder_path)
+    file.copy(mqpar_path, folder_path)
     suppressWarnings(file.copy(unlist(r), folder_path, overwrite = TRUE))
     file.copy(file.path(dname, "combined", "proc"), folder_path, recursive = TRUE)
     file.copy(file.path(dname, "combined", "txt"), folder_path, recursive = TRUE)
@@ -328,9 +370,8 @@ ProteoPipe_widget<-function(env = parent.frame()){
     writeLines(stop_lines, con_temp)
     close(con_temp)
     
-    # Change visibilities; Quit is always visible and enabled.
+    # # Change visibilities; Quit & Expert is always visible and enabled.
     enabled(lbl_MaxQuant) <- FALSE
-    enabled(but1) <- TRUE # Folder button
     enabled(but2) <- FALSE # Run button
     enabled(but3) <- TRUE # html button
     enabled(but4) <- TRUE # pdf button
@@ -443,9 +484,9 @@ ProteoPipe_widget<-function(env = parent.frame()){
   }
   but5 <- gbutton("Quit", container = gr_quit, handler = han5)
   
-  # Graphics mounted; Quit is always visible and enabled.
+  # Graphics mounted; Quit & Expert is always visible and enabled.
   enabled(labelimg1) <- FALSE # Results label
-  enabled(but1) <- TRUE # Folder button
+  enabled(but11) <- TRUE # Expert button
   enabled(but2) <- FALSE # Run button
   enabled(but3) <- FALSE # html button
   enabled(but4) <- FALSE # pdf button
@@ -463,15 +504,14 @@ ProteoPipe_widget<-function(env = parent.frame()){
     raw_list <- file_list[grepl(".raw", file_list, fixed = TRUE)]
 
     if ((length(raw_list) == 1) & (first_wait)) {
-      assign("raw_path", file.path(normalizePath(dname, "\\"), raw_list[[1]], fsep="\\"), currentenv)
       assign("first_wait", FALSE, currentenv)
+      assign("raw_path", file.path(normalizePath(dname, "\\"), raw_list[[1]], fsep="\\"), currentenv)
       cat("Found .raw file:", raw_path, "\n")
 
       # Change visibilities; Quit is always visible and enabled.
       visible(lbl_no_raw_files) <- FALSE
       visible(lbl_many_raw_files) <- FALSE
       enabled(labelimg1) <- FALSE # Results label
-      enabled(but1) <- TRUE # Folder button; keep enabled in case user selects wrong folder
       enabled(but2) <- TRUE  # Run button
       enabled(but3) <- FALSE # html button
       enabled(but4) <- FALSE # pdf button
@@ -482,18 +522,21 @@ ProteoPipe_widget<-function(env = parent.frame()){
       
       # Change visibilities; Quit is always visible and enabled.
       visible(lbl_no_raw_files) <- TRUE
-      enabled(but1) <- TRUE # Folder button; keep enabled in case user selects wrong folder
       enabled(but2) <- FALSE  # Run button
     }
     
-    if (length(raw_list) > 1) {
-      assign("first_wait", TRUE, currentenv)
+    if (length(raw_list) > 1 & (first_wait)) {
+      assign("first_wait", FALSE, currentenv)
 
-      # Change visibilities; Quit is always visible and enabled.
-      visible(lbl_many_raw_files) <- TRUE
-      enabled(but1) <- TRUE # Folder button; keep enabled in case user selects wrong folder
-      enabled(but2) <- FALSE  # Run button
-      #}
+      # Change visibilities if in default mode; Quit is always visible and enabled.
+      if (isFALSE(svalue(but11))) {
+        visible(lbl_many_raw_files) <- TRUE
+        enabled(but2) <- FALSE  # Run button
+      } else {
+        assign("raw_path", file.path(normalizePath(dname, "\\"), raw_list[[1]], fsep="\\"), currentenv)
+        cat("Found .raw file:", raw_path, "\n")
+        enabled(but2) <- TRUE  # Run button
+      }
     }
     
     Sys.sleep(1) # Wait a bit before continue looping

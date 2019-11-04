@@ -5,7 +5,7 @@
 # and will place warnings log file on User Desktop.
 # If installed to be run from a Windows shortcut,
 # the shortcut properties should be
-# Target: %COMSPEC% /C Rscript --vanilla "%USERPROFILE%\Work Folders\Desktop\ProteoPipe\ProteoPipe_wrapper.R"
+# Target: %COMSPEC% /C Rscript --vanilla "F:\ProteoPipe\ProteoPipe_wrapper.R"
 # Start in: "C:\Program Files\R\R-3.5.0\bin"
 # Input arguments:
 # None
@@ -19,15 +19,27 @@
 
 ## Defaults
 # Installation directory
-#dname <- file.path("F:", "Working Folder", "TL", "ProteoPipe", fsep="\\")
-dname <- normalizePath(dirname(sys.frame(1)$ofile), winslash = "\\")
+thisFile <- function() {
+  cmdArgs <- commandArgs(trailingOnly = FALSE)
+  needle <- "--file="
+  match <- grep(needle, cmdArgs)
+  if (length(match) > 0) {
+    # Rscript
+    return(normalizePath(sub(needle, "", cmdArgs[match])))
+  } else {
+    # 'source'd via R console
+    return(normalizePath(sys.frames()[[1]]$ofile))
+  }
+}
 
+dname_default <- dirname(thisFile())
+dname <- dname_default
 
 tryCatch({source(file.path(dname, "ProteoPipe_widget.R"))
-  # Defaults
+  ## Defaults
   console <- TRUE # Do-while (repeat) console open flag
-  text_log <- file.path(dname, "log.txt", fsep="\\")
-  warnings_log <- file.path(dname, "warnings.txt", fsep="\\")
+  text_log <- file.path(dname, "log.txt")
+  warnings_log <- file.path(dname, "warnings.txt")
   temp_file <- file.path(dname, "MQtemp.txt")
   logo <- c("-------------------------------------",
             "ProteoPipe v1 [June, 2019]",
