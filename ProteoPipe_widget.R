@@ -162,7 +162,6 @@ ProteoPipe_widget<-function(env = parent.frame()){
     
     replace_txt <- stri_join("      <string>", raw_path, "</string>")
     
-    mqpar_path <- file.path(dname, "mqpar.xml", fsep="\\")
     con_temp <- file(mqpar_path)
     
     txt <- readLines(con_temp)
@@ -281,19 +280,6 @@ ProteoPipe_widget<-function(env = parent.frame()){
     
     xml_path <- file.path(dname, "mqpar.xml", fsep="\\")
     file.copy(xml_path, txt_folder, copy.date = TRUE)
-    
-    #yaml_path <- file.path(dname, "Template_QC_Hela_digests_1h_400_Niklas.yaml", fsep="\\")
-    # yaml_list <- file_list[grepl(".yaml", file_list, fixed = TRUE)]
-    # # Use first in list
-    # if (length(yaml_list) > 0) {
-    #   yaml_path <- file.path(normalizePath(dname, "\\"), yaml_list[[1]], fsep="\\")
-    # }
-    # 
-    # if(length(yaml_path) > 0) {
-    #   yaml_list_object <- yaml.load_file(yaml_path)
-    #   cat("Loaded .yaml file: ", yaml_path, "\n")
-    # }
-    # else {yaml_list_object <- list()}
     
     yaml_list_object <- yaml.load_file(yaml_path)
     
