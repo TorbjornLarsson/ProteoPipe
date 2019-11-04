@@ -1,5 +1,5 @@
 #Summary:
-#A widget to generate a PTXQC Quality Control of MS^2 instrument
+#A widget to generate a PTXQC Quality Control of LC-MSMS instrument
 #based on MaxQuant analysis.
 #Use require to put package info into the log file.
 
