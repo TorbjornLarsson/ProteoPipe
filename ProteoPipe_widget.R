@@ -16,10 +16,11 @@ ProteoPipe_widget<-function(env = parent.frame()){
   # Load widget graphics; assumes librarys loaded to the used R
   # Object references will be passed by reference frame (so is mutable) 
   library(gWidgets2)
-  # To get the toolkit RGTk2, load library gWidgets2RGtk2 into R and accept installing GTK+
+  # To get the toolkit RGTk2, load library gWidgets2RGtk2 into R and accept installing GTK+:
+  # install.packages(c("gWidgets2RGtk2", "cairoDevice"))
+  # library(gWidgets2RGtk2)
   options("guiToolkit"="RGtk2")
   library(tcltk2)
-  #library(graphics)
 
   # Load Quality Control methods
   library(PTXQC)
