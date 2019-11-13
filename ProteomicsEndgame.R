@@ -1,21 +1,24 @@
 # Summary:
-# A wrapper to generate a summary of PTXQC Quality Control of LC_MSMS instrument.
+# A help function with a pop up GUI to generate a year summary of PTXQC Quality Control of LC_MSMS instrument.
 # Intended to be run with local R-3.5.0 installation on User,
 # on the ProtePipe folder.
-# Target: F:\ProteoPipe\Proteomics_Endgame.R"
-# Start in: "C:\Program Files\R\R-3.5.0\bin"
-# Input arguments:
-# None, start date, stop date.
-# Output:
-# File with pass/fail values summary table. Bar plot of summary table.
-# Reference: HeLa_QC_20190823_20190823120456.raw, "Average~Overall~Quality" 0.900145967423899.
+
+## Load libraries
+
+# Load widget graphics; assumes librarys loaded to the used R
+# Object references will be passed by reference frame (so is mutable) 
+library(gWidgets2)
+# To get the toolkit RGTk2, load library gWidgets2RGtk2 into R and accept installing GTK+:
+# install.packages(c("gWidgets2RGtk2", "cairoDevice"))
+# library(gWidgets2RGtk2)
+options("guiToolkit"="RGtk2")
+library(tcltk2)
 
 library(graphics)
-devAskNewPage(ask = FALSE)
-
+library(plyr)
 library(dplyr)
+library(stringi)
 
-## Defaults
 
 # Installation directory
 thisFile <- function() {
@@ -33,101 +36,126 @@ thisFile <- function() {
 
 dname <- dirname(thisFile())
 
-logo <- c("-------------------------------------",
-          "Proteomics Endgame v1 [November, 2019]",
-          "Uppsala University",
-          "Niklas Handin, et al.",
-          "-------------------------------------")
-
 currentenv <- environment()
-graphics.off()
 
-ProteomicsEndgame <- function(startDir, stopDir) {
-
-  ## User info
-  writeLines(logo)
-  cat("Arguments can be start and stop directories; default is using first to last.\n")
-  cat("To read in paths from a File select, copy and use 'x <- readline()' for correct format.\n")
+ProteomicsEndgame <- function(env = parent.frame()) {
   
-  ## Parse arguments
-  if (missing(startDir) || missing(stopDir)) {
-    assign("dirList", dir(dname, pattern = "^[0-9]", full.names = TRUE, ignore.case = TRUE), currentenv)
-    len <- length(dirList)
+  ## GUI Widget
+  win <<- gwindow("ProteoPipe", width=900, height=900, visible = TRUE)
+  focus(win)
+  gr <<- ggroup(container = win, horizontal = FALSE, visible = FALSE)
+  
+  # With 14 rows: 1 label, 12 months, 1 close button.
+  # And 9 columns: 1 label, 8 boxes.
+  # glayout needs a widget list for proper, easy attachment.
+  lyt <<- glayout(homogeneous = TRUE, spacing = 10, container=gr)
+  assign("widgetList", widgetList <- list(), .GlobalEnv)
+  
+  # First row is labels
+  lyt[1,1] <<- widgetList[["w1,1"]] <<- glabel("Month  ", container = lyt)
+  font(widgetList[["w1,1"]]) <<- list(family="monospace", weight="bold", size=c(15))
+
+  lapply(n <- 1:8, function(n) {
+    lyt[1,n+1] <<- widgetList[[stri_join("w1,", as.character(n+1))]] <<- glabel(n, container = lyt)
+    font(widgetList[[stri_join("w1,", as.character(n+1))]]) <<- list(family="monospace", weight="bold", size=c(15))
+  })
+
+  # Then 12 month rows
+  lapply(month.abb, function(month){
+    n <- match(month, month.abb)
+    lyt[n+1,1] <<- widgetList[[stri_join("w", as.character(n+1), ",1")]] <<- glabel(month, container = lyt)
+    font(widgetList[[stri_join("w", as.character(n+1), ",1")]]) <<- list(family="monospace", weight="bold", size=c(15))
+
+    lapply(m <- 1:8, function(m){
+    lyt[n+1,m+1] <- widgetList[[stri_join("w", as.character(n+1), "," , as.character(m+1))]] <<- glabel(stri_unescape_unicode("\\u25a0"), container = lyt) # Unicode Character 'BLACK SQUARE' (U+25A0)
+    font(widgetList[[stri_join("w", as.character(n+1), "," , as.character(m+1))]]) <<- list(size=c(28), foreground="gray")
+    })
+  })
+
+  # Close button
+  han1 <- function(..., envir = parent.frame()){
+    dispose(win, ...)
   }
+  lyt[14,9] <- widgetList[["close"]] <- gbutton("Close", container = lyt, handler = han1)
 
-  # Select first folder in date order
-  if (missing(startDir)) {
-    if(len != 0) {
-      assign("startdir", dirList[[1]], currentenv)
-    }
-  } else assign("startdir", normalizePath(startDir, winslash = "/"), currentenv)
+  ## Defaults
+  thatDate <- seq.Date(Sys.Date(), length = 2, by = "-12 months")[2]
 
-  # Select last folder in date order
-  if (missing(stopDir)) {
-    if(len != 0) {
-      assign("stopdir", dirList[[len]], currentenv)
-    }
-  } else assign("stopdir", normalizePath(stopDir, winslash = "/"), currentenv)
+  ## Select folders based on current date
+  # Assemble a data frame with file paths, years and month
+  assign("dirList", dir(dname, pattern = "^[0-9]", full.names = TRUE, ignore.case = TRUE), currentenv)
+
+  # Select first folder 12 months back
+  dfGrouped <- data.frame(file_name = dirList, date = as.Date(basename(dirList)))
+  assign("dfFiles", dfGrouped[dfGrouped$date >= thatDate, ], currentenv)
   
-  directories <- dirList[(grep(startdir, dirList, value = FALSE):grep(stopdir, dirList, value = FALSE))]
-  
-  ## Assemble list with dates & Average Overall Quality scores
-  results <- lapply(directories, function(directory) {
+  ## Assemble list with dates & scores
+  directories <- as.character(dfFiles$file_name)
+  d <- lapply(directories, function(directory) {
+
+    date <- as.Date(basename(directory))
     
     fileList <- list.files(path = directory)
     heatmapFile <- fileList[grepl("_heatmap.txt", fileList, fixed = TRUE)]
     hmTable <- read.table(paste(directory, heatmapFile, sep="/"), sep="\t", header = TRUE)
     
-    date <- basename(directory)
-    AOQscore <- hmTable$Average.Overall.Quality
-    
-    data.frame(
-      date = date, 
-      AOQscore = AOQscore,
+    # Column 1 is a file reference; if PTXQC ran on several files, a column 6 is added.
+    scores <- hmTable[-c(1)] 
+    if (dim(scores)[2] > 20) scores <- scores[-c(6)]
+
+    e <- data.frame(
+      date = date,
+      score = scores,
       stringsAsFactors=FALSE)
-  })
-  results <- do.call(rbind, results)
-  
-  ## Plot simple bar plot with height and color accordingly
-  ## We don't use the ProtePipe fail level for an unbiased comparison.
-  
-  barColors <- lapply(results$AOQscore, function(score) {
-    if (score < 0.5) {
-        sv <- 2*score   # Black value = [0,1] for score = [0.5, 1]
-        return(hsv(0,1,1-sv)) # Red value is fixed
-    }
+    colnames(e) <- c(LETTERS[1:21])
+    
+    return(e)
+    })
+  results <- do.call(bind_rows, d)
+
+  ## Convert the list to FAIL/PASS color scores
+  d <- apply(results, 1, function(scores) {
+    # Strip date
+    date <- scores[1]
+    scores <- scores[-c(1)]
+
+    if (any(as.numeric(scores) < 0.25)) colorScore <- hsv(0,1,1) # Too low QC score
     else {
-        sv <- (2-2*score)   # Black value = [1,0] for score = [0.5, 1]
-        return(hsv(0.3,1,1-sv)) # Green value is fixed
+      score <- as.numeric(scores[[20]])
+      if (score < 0.5) {
+        sv <- 2*score   # Black value = [0,1] for score = [0.5, 1]
+        colorScore <- hsv(0,1,1-sv) # Red value is fixed
       }
+      else {
+        sv <- (2-2*score)   # Black value = [1,0] for score = [0.5, 1]
+        colorScore <- hsv(0.3,1,1-sv) # Green value is fixed
+      }
+    }
+
+    e <- data.frame(
+      date = date,
+      colorScore = colorScore,
+      stringsAsFactors=FALSE)
+    return(e)
   })
+  results <- do.call(bind_rows, d)
 
-  barplot(results$AOQscore, axes=FALSE, col=as.character(barColors))
-
-  ## Group data by year and month and make bar plots
-  df <- data.frame(date = as.Date(results$date), color = unlist(barColors))
-  dfGrouped <- mutate(df, year = format(date, "%Y"), month = format(date, "%m"))
-
-  #par(mfrow = c(length(min(dfGrouped$year):max(dfGrouped$year))*12, 1))
-  # par(mar=rep(0,4)) # Margins off
-  # par(mfrow = c(12,1)) # With margins off
-  
-  # par(mfrow = c(4,1)) # With margins
-  
-  for (year in seq(min(dfGrouped$year):max(dfGrouped$year))) {
-    dfYear <- dfGrouped[dfGrouped$year == year,]
-    for (month in seq(1:12)) {
-      dfMonth <- dfYear[dfYear$month == month,]
-      
-      # Check if data frame has columns but no observations before plotting.
-      if (dim(dfMonth)[1] != 0) {
-        print(dfMonth)
-        dev.new()
-        barplot(rep(1, length(dfMonth$color)), names.arg = dfMonth$date, axes=FALSE, col=as.character(dfMonth$color))
+  ## Group data by month and color the boxex
+  dfGrouped <- mutate(results, month = format(as.Date(date), "%m"))
+  for (n in seq(1:12)) {
+    dfMonth <- dfGrouped[as.numeric(dfGrouped$month) == n,]
+    # Check if data frame has columns but no observations before plotting.
+    if (dim(dfMonth)[1] != 0) {
+      colorscores <- dfMonth$colorScore
+      for (m in seq(1:length(colorscores))){
+        assign("widgetList", widgetList, .GlobalEnv) # This works for binding
+       font(widgetList[[stri_join("w", as.character(n+1), "," , as.character(m+1))]]) <<- list(size=c(28), foreground=colorscores[[m]])
       }
     }
   }
-
-  return(results)
   
+  ## Mark current month
+  assign("widgetList", widgetList, .GlobalEnv)
+  font(widgetList[[stri_join("w", format(Sys.Date(), "%m"), ",1")]]) <<- list(weight="bold", size=c(15), style="italic")
+
 } # End call

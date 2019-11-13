@@ -49,6 +49,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
   mqpar_path <- mqpar_path_default
   yaml_path_default <- file.path(dname, "Template_QC_Hela_digests_1h_400_Niklas.yaml", fsep="\\")
   yaml_path <- yaml_path_default
+  source(file.path(dname, "ProteomicsEndgame.R"))
 
   #------------------Calling------------------
 
@@ -455,10 +456,12 @@ ProteoPipe_widget<-function(env = parent.frame()){
   gr_res <- ggroup(container = hor2) 
   but3 <- gbutton("html", container = gr_res, handler=function(...) browseURL(file.path(folder_path, basename(r$report_file_HTML))))
   but4 <- gbutton("pdf", container = gr_res, handler=function(...) browseURL(file.path(folder_path, basename(r$report_file_PDF))))
+  but6 <- gbutton("1 year summary", container = gr_res, handler=function(..., envir = parent.frame()) ProteomicsEndgame())
   
   # Quit button
   gr_quit <- ggroup(container = hor2)
-  han5 <- function(..., envir = parent.frame()){
+#  han5 <- function(..., envir = parent.frame()){
+  han6 <- function(..., envir = parent.frame()){
     graphics.off()
     dispose(win, ...)
     stop_lines <- c(stri_join(paste(Sys.time()), "\n"), "-------------------------------------\n\n")
@@ -469,7 +472,8 @@ ProteoPipe_widget<-function(env = parent.frame()){
     console <- FALSE # Flag console closed
     quit()
   }
-  but5 <- gbutton("Quit", container = gr_quit, handler = han5)
+#  but5 <- gbutton("Quit", container = gr_quit, handler = han5)
+  but6 <- gbutton("Quit", container = gr_quit, handler = han6)
   
   # Graphics mounted; Quit & Expert is always visible and enabled.
   enabled(labelimg1) <- FALSE # Results label

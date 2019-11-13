@@ -1,5 +1,5 @@
 # Summary:
-# A widget wrapper to generate a PTXQC Quality Control of LC-MSMS instrument
+# A widget wrapper to generate a PTXQC Quality Control of LC_MSMS instrument
 # based on MaxQuant analysis.
 # Intended to be run with local R-3.5.0 installation on User,
 # and will place warnings log file on User Desktop.
