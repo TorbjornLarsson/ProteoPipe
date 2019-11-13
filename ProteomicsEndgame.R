@@ -38,8 +38,9 @@ dname <- dirname(thisFile())
 
 currentenv <- environment()
 
-ProteomicsEndgame <- function(env = parent.frame()) {
-  
+#ProteomicsEndgame <- function(env = parent.frame()) {
+ProteomicsEndgame <- function() {
+ 
   ## GUI Widget
   win <<- gwindow("ProteoPipe", width=900, height=900, visible = TRUE)
   focus(win)
@@ -156,6 +157,6 @@ ProteomicsEndgame <- function(env = parent.frame()) {
   
   ## Mark current month
   assign("widgetList", widgetList, .GlobalEnv)
-  font(widgetList[[stri_join("w", format(Sys.Date(), "%m"), ",1")]]) <<- list(weight="bold", size=c(15), style="italic")
+  font(widgetList[[stri_join("w", as.character(as.numeric(format(Sys.Date(), "%m"))+1), ",1")]]) <<- list(weight="bold", size=c(15), style="italic")
 
 } # End call
