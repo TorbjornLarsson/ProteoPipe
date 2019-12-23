@@ -32,8 +32,7 @@ thisFile <- function() {
   }
 }
 
-dname_default <- dirname(thisFile())
-dname <- dname_default
+dname <- dirname(thisFile())
 
 tryCatch({source(file.path(dname, "ProteoPipe_widget.R"))
   ## Defaults

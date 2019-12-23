@@ -45,6 +45,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
   cat("Console texts are logged in ", text_log, "\n")
   cat("Warnings are logged in ", warnings_log, "\n")
   MQ_maxtime <- 7200 # Time in seconds; QC run takes about 1 hour, so 2 hours seems reasonable.
+  dname_default <- dname
   mqpar_path_default <- file.path(dname, "mqpar_for_HeLa.xml", fsep="\\")
   mqpar_path <- mqpar_path_default
   yaml_path_default <- file.path(dname, "Template_QC_Hela_digests_1h_400_Niklas.yaml", fsep="\\")
@@ -173,9 +174,9 @@ ProteoPipe_widget<-function(env = parent.frame()){
     close(con_temp)
     
     # Then we build the R pipe command and call MaxQuant from the command line.
-    error_file <- file.path(dname, "error.txt", fsep="\\")
-    mq_path <- file.path(dname, "MaxQuant_1.6.3.4\\MaxQuant\\bin\\MaxQuantCmd.exe")
-    system2(mq_path, shQuote(mqpar_path), stdout = temp_file, stderr = error_file, wait = FALSE)
+    error_file <- file.path(dname_default, "error.txt", fsep="\\")
+    mq_path <- normalizePath(file.path(dname_default, "MaxQuant_1.6.3.4\\MaxQuant\\bin\\MaxQuantCmd.exe", fsep="\\"))
+    system2(mq_path, shQuote(normalizePath(mqpar_path)), stdout = temp_file, stderr = error_file, wait = FALSE)
     enabled(lbl_MaxQuant) <- TRUE
     cat("MaxQuant has started.\n")
     
@@ -184,7 +185,7 @@ ProteoPipe_widget<-function(env = parent.frame()){
     # Use msconvert for converting to mzXML
     # Filter out MS1 spectra
     cat("Converting MS1/MS2 .raw file to MS1 .mzXML file for plotting purposes\n")
-    cmd <- file.path(dname, "ProteoWizard 3.0.19246.075ea16f5 64-bit\\msconvert.exe")
+    cmd <- file.path(dname_default, "ProteoWizard 3.0.19246.075ea16f5 64-bit\\msconvert.exe")
     arg <- stri_join(shQuote(raw_path), "--verbose", "--filter", shQuote("msLevel 1"), "--mzXML -o", shQuote(normalizePath(dname)), sep=' ')
     system2(cmd, arg)
     
@@ -460,7 +461,6 @@ ProteoPipe_widget<-function(env = parent.frame()){
   
   # Quit button
   gr_quit <- ggroup(container = hor2)
-#  han5 <- function(..., envir = parent.frame()){
   han6 <- function(..., envir = parent.frame()){
     graphics.off()
     dispose(win, ...)
@@ -472,7 +472,6 @@ ProteoPipe_widget<-function(env = parent.frame()){
     console <- FALSE # Flag console closed
     quit()
   }
-#  but5 <- gbutton("Quit", container = gr_quit, handler = han5)
   but6 <- gbutton("Quit", container = gr_quit, handler = han6)
   
   # Graphics mounted; Quit & Expert is always visible and enabled.
